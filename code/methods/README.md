@@ -1,8 +1,8 @@
-# Methods — Anti-Dark Forest simulation harnesses (Track 3)
+# Methods — simulation harnesses (Track 3)
 
-Six falsifiable methodologies from `Tools for the small models.md`, each a
-self-contained, runnable Python harness a small-model agent can execute and
-iterate (the agent writes/repairs the script, runs it locally, reads output).
+Six falsifiable methodologies, each a self-contained, runnable Python harness a
+small-model agent can execute and iterate (the agent writes/repairs the script,
+runs it locally, reads output).
 
 Each harness exposes a common interface via `harness.py`:
   - `run(**params) -> dict`  — executes the simulation, returns a result dict
@@ -31,7 +31,7 @@ method to each small-model agent, which calls `method_run` to execute it. Lean
 Methods:
   1. marl.py        — Asymmetric MARL: EROI of kinetic strike vs assimilation
   2. montecarlo.py  — Cosmic ergodicity: is Heuristic Seeding a prerequisite?
-  3. thermo_ca.py   — 3D cellular automata: Dark Forest = thermal visibility filter
+  3. thermo_ca.py   — 3D cellular automata: thermal-visibility filter
   4. kl_div.py      — Information theory: simulate bio-chaos vs harvest it (KL-div)
   5. lean.py        — System dynamics: warfare as Muda, phased out by assimilation
   6. bayesian.py    — Epistemic game theory: blindness vs transparency
