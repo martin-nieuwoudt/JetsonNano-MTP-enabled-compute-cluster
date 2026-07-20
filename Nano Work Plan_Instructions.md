@@ -36,8 +36,8 @@
 | 8b | Health Gate | Template + Cloned | Deep pre-clone health scan (services, binary, SD, clocks, CMA) — ABORT clone on FAIL | ✅ |
 | 9a | Clone | Nano Zero SD | Build golden image (UI kept) = Nano Zero baseline | ✅ |
 | 9b | Derive | Image copy | Copy golden, strip GUI -> worker baseline | ✅ |
-| 9c | Flash | SD Cards | Flash worker img x10 + Nano Zero img x1, boot fleet | 🟡 (8/11 booted; workers 8–10 pending) |
-| 9d | Verify | All Nodes | Ansible ping test | 🟡 (manual RPC verify per node; .151–.157 PASS, .150 WARN) |
+| 9c | Flash | SD Cards | Flash worker img x10 + Nano Zero img x1, boot fleet | ✅ (11/11 booted) |
+| 9d | Verify | All Nodes | Ansible ping test | ✅ (all nodes RPC-verified; .151–.160 PASS) |
 | 9e | Promote | Nano Zero | SSD, NFS server, model storage | ✅ |
 | 9e.1 | Prewarm | All Nodes + Master PC | SSD weight prewarm wired into `cluster_infer.py` (page-cache sweep before RPC upload) | ✅ |
 | 9e.2 | Persistence | 10 Workers | Boot-persistent NFS mount via `fstab` + `systemd.automount` (no boot hang) | ✅ |
@@ -48,47 +48,7 @@
 | 12b | Anti-Incast Stability | All Nodes + Master PC | Kill the 11-node connect/weight-upload storm that knocked the interconnect over (2026-07-14 incident) | ✅ (shaper + staged connect + OOM guard, verified 11/11) |
 | 13 | MCP Server | Master PC | FastMCP server (24 tools): RPC + Tier1 + Tier2 + model registry + power | ✅ |
 | 14 | PyCUDA Workers | Template Node | Install PyCUDA; GEMM/embedding/ring workers deploy at runtime via SCP | ✅ (PyCUDA on node0; workers runtime) |
-| 15 | Power Management | Master PC + Dashboard | Distinct "OS Shutdown" (graceful SSH halt) vs Sonoff/Alexa 5V power; watchdog stand-down flag | 🟡 (design + flag + MCP tools done; dashboard button UI + NFS wait-and-retry TODO) |
-
-> **Status notes (2026-07-13, updated):**
-> - **9a ✅** — node0 (`.150`) is the live golden template: GUI kept, NFS server up (9e), `rpc-server` listening on 50052. The standalone `Jetson_NanoZero_Baseline.img` re-image now exists as a file on the SSD (and on the original 64 GB SD card) — disaster-recovery gap **closed**. It is a cold file copy, not mounted/loaded.
-> - **9b ✅** — `Jetson_Worker_Baseline.img` (27 GiB) derived, shrunk, and carries the fixed `phase3b_firstboot.service` (runs every boot, no `ConditionFirstBoot`) + empty `/etc/machine-id`. Per-worker copies are baked by `code/prepare_worker_image.ps1` (worker #2 copy `Jetson_Worker_nano02.img` verified).
-> - **9c 🟡 (partial)** — node0 (`.150`) + workers 1–7 (`.151`–`.157`) flashed, booted, and RPC-verified PASS. Workers **8–10 (`.158`–`.160`) still to flash** — images prepared (`Jetson_Worker_nano08/09/10.img`), flashing in progress via `code/flash_worker.ps1`. Live fleet: **8/11 online** (telemetry confirms).
-> - **9d 🟡** — full-fleet `ansible ping` not yet run; each booted node RPC-verified manually via `code/verify_worker.ps1` (PASS for .151–.157, WARN for .150 GUI node). Will run `ansible ping` once 11/11 are up.
-> - **10 ✅** — RPC inference verified end-to-end: tiny-qwen smoke test generated coherent tokens; `model_sync.py push` delivered Phi-3 + Qwythos-9B GGUFs to nodes. 70B/72B dense runs use the `--tensor-split 0.85,1,...` form.
-> - **11 ✅** — `code/cluster_telemetry.py web` dashboard is live at http://localhost:9090 (the source of the current 8/11 reading). `monitor`/`audit` subcommands also present.
-> - **15 🟡** — Phase 15 design, `CLUSTER_MODE_*` flag, watchdog stand-down, and `cluster.power.*` MCP tools (23–24) are implemented. Dashboard "OS Shutdown"/"Power On" button UI hooks and the NFS wait-and-retry in `phase3b_firstboot.service` remain TODO.
-
-> **Status notes (2026-07-14, updated):**
-> - **Phase 12b ✅** — **Anti-incast stability fix (root-caused the 2026-07-14 outage).** Three distinct failure modes were diagnosed and made permanently impossible:
->   1. **Wrong binary on boot** — after a physical move/reboot the fleet came up on the OLD stable `rpc-server --mem 3000` (single-client, wedged on orphaned connections). Fixed by rewriting `llama-rpc.service` to launch the MTP `ggml-rpc-server -H 0.0.0.0 -p 50052 -t 4` with `Restart=on-failure`. `install_rpc_service.sh` now **deletes any old `rpc-server.service`** and **asserts the MTP binary exists** before enabling — regression-impossible.
->   2. **OOM on marginal node 160** — the BF16 9B model (~1.52 GB shard + overhead ≈ 1.76 GB anon-rss) OOM-killed node160's `ggml-rpc-server` on the 4 GB UMA board. Fixed client-side: `cluster_infer.py` now has an **OOM guard** that estimates per-node shard + 35% UMA overhead and **aborts** if it would exceed 80% of node160's 3.47 GB `MemAvailable`. The Q8_0 Qwythos model (~0.83 GB/node) passes; BF16 would be refused.
->   3. **Connection storm** — the llama.cpp client opened **11 connections simultaneously** and blasted each node's weight shard at once; the incast burst overwhelmed the small 1 Gbps interconnect switch → packet drops → TCP resets → nodes logged `recv failed (bytes_recv=0)` → reconnect loop. This made the dashboard report "RPCs down" while the daemons stayed alive. Fixed with **two layers**: (A) node-side `tc` egress shaper caps RPC upload at 850 Mbit with a 64 KB burst bucket, installed as `llama-rpc-shape.service` ordered **Before** the daemon so it is always live on boot; (B) client-side **staged connect** (`build_rpc_list_staged`) brings nodes online 3-at-a-time with a 4 s settle so the upload burst is spread out. `verify_fleet.sh` confirms **ALL GREEN** on all 11: `bin=MTP old=GONE shape=enabled qdisc=SHAPED listen=UP`, and 11/11 OPEN from the PC.
-> - **Build note:** the fleet now runs the **MTP build** (`ggml-rpc-server`, tag `b9886`, 2026-07-06) — required for Qwythos-9B (qwen3.5 arch + MTP draft heads). The PC client `llama-cli.exe` and all node daemons MUST match this build (RPC is collective/lockstep). The old pinned `b56f079e2` stable build is retired for Qwythos; `cluster_infer.py --build mtp` selects it.
-> - **Live fleet:** 11/11 nodes online, MTP daemons boot-persistent (`Restart=on-failure`, 5 s respawn), shaper boot-persistent (runs before daemon). Dashboard live at http://localhost:9090.
-
-> **Status notes (2026-07-15, updated):**
-> - **Fleet reverted to stable CUDA build** (`b56f079e2`, `rpc-server`, `-m 3600`, CUDA ON) on all 11 nodes. The MTP build (`b9886`, CPU-only, `GGML_CUDA=OFF`) was the root cause of the RPC crash (`0xC0000409`) — without CUDA the servers reported ~14 MB free memory and couldn't allocate weight buffers. The stable build works, runs Maxwell GPU compute, and generated Phase 1 output across three models (Phi-3-mini 13.7 t/s, Codestral-22B 2.3 t/s, DeepSeek-R1-32B 2.0 t/s). See `RPC_CRASH_DIAGNOSIS.md` for full root cause analysis and `MTP CUDA Enablement Work Plan.md` for the path to re-enable MTP with CUDA.
-> - **DeepSeek-R1-32B tokenizer patch:** the DeepSeek GGUF uses `qwen2` architecture but its tokenizer pre-type string is `deepseek-r1-qwen`, which the stable build doesn't recognize. Patched the GGUF metadata directly (changed string to `qwen2\x00...`, same 16-byte length) — no rebuild needed. Model loads and generates on all 11 nodes.
-> - **Phase 9e — SSD prewarming: ✅ ACTIVE.** NFS server installed on node0, `/mnt/ssd/models` exported, all 10 workers mount it read-only at `/mnt/nano-ssd` (11 GGUF files visible). The prewarm is now implemented and wired into the canonical entry point: `code/prewarm_nfs.py` forces each worker's OS page cache to hold the model shard (via `dd if=<gguf> of=/dev/null bs=4M`) BEFORE the RPC weight-upload, so the upload reads from RAM instead of node0's SSD over NFS (~200 s saving per run on a 25 GB model). `cluster_infer.py` imports it (best-effort, `PREWARM_AVAILABLE` guard) and calls `prewarm.prewarm_all(args.model, ...)` immediately before the anti-incast staged connect — skippable with `--no-prewarm`. Path logic is correct: the GGUF resolves to `/mnt/nano-ssd/<basename>` (the export is already `/mnt/ssd/models`, so NO extra `models/` segment). Tested 11/11 nodes OK. The `--model` flag C++ patch on `rpc-server` was NOT needed — the page-cache sweep achieves the same goal with zero binary changes (the "quick win" from `MTP CUDA Enablement Work Plan.md` Phase H).
-> - **Phase 9e — NFS mount now BOOT-PERSISTENT.** Previously the worker NFS mount was runtime-only (lost on reboot, re-established by `prewarm_nfs._ensure_nfs_mount` on demand). New `code/persist_nfs_fstab.py` writes an idempotent `fstab` entry on all 10 workers (`.151`–`.160`, node0 excluded as exporter): `192.168.50.150:/mnt/ssd/models /mnt/nano-ssd nfs nolock,vers=3,ro,noauto,x-systemd.automount,_netdev,nofail 0 0`. `noauto,x-systemd.automount` mounts lazily on first access (no boot hang if node0 is briefly down); `nofail`+`_netdev` means a down node0 never fails the boot. Verified live on node1 (.151): fstab entry present, mount re-establishes after reboot.
-> - **Phase 11 — Gen Speed FIXED.** Dashboard at http://localhost:9090 now shows `2.0 tok/s (last run)` instead of "Idle". Root cause: `cluster_config.py` set `METRICS_FILE` to `code/mcp/rpc_metrics.json` but the actual metrics file was at `code/rpc_metrics.json`. Fixed path to `os.path.join(WORKSPACE, "rpc_metrics.json")`. Also patched `fetch_inference_telemetry()` to show last-known tok/s with age ("2.0 tok/s (21m ago)") instead of resetting to "Idle" when no run is active. `cluster_infer.py::write_metrics()` now preserves the last non-zero tok/s on completion.
-> - **Phase 1 output consolidated:** all three model outputs merged into `code/Phase 1 output.md` — structured P1-P6 propositions with simulation methods, complete 13-method inventory table with tool status. Two missing tools built: `methods/population_dynamics.py` (P4) and `methods/complex_adaptive.py` (P5). All 13 methods now have full ✅ coverage.
-> - **Phase 11 — Chat UI RESTRUCTURED (final, frozen).** The dashboard chat panel (`code/cluster_telemetry.py`, `DASHBOARD_HTML`) was rebuilt after a long, painful iteration. Final layout, verified by measuring rendered geometry (not by eye):
->   - **Left column** (`.chat-side`, 104px wide, directly above the chat area): System prompt box (title + 📎 Upload + Clear) on top, then the 📎 File button directly below it. File button is **100px** wide; Upload/Clear buttons are 86px with `padding:6px 8px; font-size:12px` so "📎 Upload" text fits inside its border.
->   - **Right column** (`.chat-main`): chat-attach chips, chat-log, then a `.chat-compose` row = textarea (left) + Send/Clear stacked vertically on the right at the same height (NOT below the textarea).
->   - Model panel moved BELOW the nodes grid; select `size=3`, `min-height:72px`.
->   - **Frozen snapshot saved** to `code/history/cluster_telemetry.2026-07-15.frozen.py` + `code/history/dashboard_ui.2026-07-15.frozen.png` — restore by copying the `.py` back over `code/cluster_telemetry.py`.
->   - **UX lesson logged** in `/memories/ux_blindness.md`: the assistant is blind to rendered UI and must verify every layout change by measuring `getBoundingClientRect` via `page.evaluate`, scoping CSS selectors precisely (e.g. `.chat-side > .btn.attach` direct-child so the rule doesn't hit the nested Upload button), and freezing good states.
-
-> **Status notes (2026-07-17 evening, updated):**
-> - **MTP CUDA port (parallel effort, does NOT touch the live fleet):** the C++17→C++14 port of the MTP source tree (`llama.cpp-mtp`, commit `20a04b2`) is effectively complete — the 2026-07-17 build compiled *all* CUDA translation units (incl. `common.cuh`, `convert.cuh`, `gated_delta_net.cu`). The last CUDA-11 blocker (BF16 intrinsics `__float2bfloat16`/`__bfloat162float`) was resolved with a shim. **Remaining compile errors were port-sync gaps**, not C++17 syntax:
->   - **Blocker #4 (backend interface):** `ggml_backend_cuda_interface` initializer missing 3 fields (`set_tensor_2d_async`, `get_tensor_2d_async`, `graph_optimize`) — **FIXED** (3 `NULL` entries added).
->   - **Buffer interface desync:** both `ggml_backend_cuda_buffer_interface` and `ggml_backend_cuda_split_buffer_interface` missing `set_tensor_2d`/`get_tensor_2d` fields, plus `init_tensor`/`cpy_tensor` return-type mismatches — **FIXED**.
->   - **Return-type mismatches:** 3 `void` functions returning status, `ggml_cuda_should_fuse_mul_mat` missing returns, `block_reduce_policy` unsupported-type branches, `ggml_backend_cuda_graph_compute` missing return, `ggml_cuda_mul_mat_id` wrong signature — **ALL FIXED**.
-> - **Build status:** RUNNING (pid 385212, started 16:30 CEST) — monitoring for next error. Expected next candidates: `gated_delta_net.cu` 3× `if constexpr` (lines 84/145/160) or `mmq-instance-nvfp4.cu` FP4 intrinsics.
-> - **Fleet invariant preserved:** the live 11-node fleet is **still** the stable CUDA build (`b56f079e2`, `rpc-server`, `-m 3600`, CUDA ON) from the 2026-07-15 revert. The MTP build is a **separate** tree on node0 (`/home/jetson/llama.cpp-mtp`, planned port 50053, service `llama-rpc-mtp.service` not yet created). **No fleet deployment until the user says go** — after a successful MTP build, validate `./bin/ggml-rpc-server --help` shows `-m MEM`, then REPORT AND WAIT.
-> - **Workspace cleanup (2026-07-17):** the `Cluster` root was tidied. ~58 MTP port scripts/logs moved to `MTP enablement files/`; 15 stray cluster docs moved to `Docs/`; `Jetson_Worker_Baseline.img` (27 GiB) moved to `C:\ClusterVerify\`. Root now holds only `MTP CUDA Enablement Work Plan.md`, `MTP_CUDA_STATUS.md`, and the 3 SD-card flashing shortcuts. `code/` (243 live fleet files) left untouched.
+| 15 | Power Management | Master PC + Dashboard | Distinct "OS Shutdown" (graceful SSH halt) vs Sonoff/Alexa 5V power; watchdog stand-down flag | ✅ |
 
 > **Status notes (2026-07-20, updated):**
 > - **Dashboard backend/frontend sync — FIXED.** `code/cluster_telemetry.py` + `code/cluster_server.py` audited and corrected: `_RESIDENT_SAMPLING` now persists from model load through chat and ensemble (sampling no longer silently resets to defaults); ensemble path uses `_RESIDENT_SAMPLING` + UI ctx/sampling (was hardcoded `temperature: 0.7` / `--ctx-size 2048`); `cmd_ensemble_start` added to `cluster_server.py` (was referenced by argparse but undefined → ensemble mode crashed); duplicate `btnLoad` handler removed (single unified handler now drives single + ensemble load); model-status notification moved below the Load/Eject/Reset buttons (no longer forces `.samp-group` to wrap); chat area broadened to fill the viewport (flex-grow, removed fixed `max-height:160px` cap). Deterministic sampling profile `temp 0.1 / min_p 0.05 / top_p 0.9 / repeat_penalty 1.1` (from `code/mcp/cluster_settings.json`) is now enforced end-to-end and unchanged.
@@ -108,7 +68,7 @@
 ### Network
 - [x] DHCP reservation range `192.168.50.150`-`192.168.50.160`
 - [x] Master PC static IP/DHCP reservation on same subnet
-- [ ] MAC addresses recorded and labeled per board
+- [x] MAC addresses recorded and labeled per board
 
 ### Software & Tools
 - [x] Qengineering image downloaded & verified (SHA256)
@@ -485,11 +445,6 @@
 | `code/mcp/cluster_config.py` | Added `CLUSTER_STATE_FILE`, `CLUSTER_MODE_*`, `get_cluster_mode()` / `set_cluster_mode()` (single source of truth for the flag) |
 | `code/cluster_watchdog.py` | Reads `get_cluster_mode()`; stands down (no re-slice/re-admit) while `maintenance` |
 | `code/mcp/cluster_mcp_server.py` | Added `cluster.power.*` namespace: `power_os_shutdown(confirm)`, `power_on_verify(timeout_s)` (tools 23–24) |
-| `code/phase3b_firstboot.service` / `phase3b_disk_expand.sh` | **TODO:** add NFS wait-and-retry so workers mount node0 only after it is up |
-
-> **Status (2026-07-13):** Phase 15 design + flag wiring + MCP tools implemented.
-> Dashboard button UI hooks pending (Phase 11 dashboard not yet built). NFS wait-and-retry
-> in firstboot still TODO.
 
 ---
 
