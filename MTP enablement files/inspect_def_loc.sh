@@ -1,2 +1,0 @@
-#!/bin/bash
-ssh -o BatchMode=yes jetson@192.168.50.150 'echo "=== STABLE def of flash_attn_ext ==="; grep -rn "void ggml_cuda_flash_attn_ext\b\|ggml_cuda_flash_attn_ext_supported" /home/jetson/llamita_cuda/ggml/src/ggml-cuda/*.cu /home/jetson/llamita_cuda/ggml/src/ggml-cuda/*.cuh; echo "=== MTP def locations ==="; grep -rln "void ggml_cuda_flash_attn_ext\b" /home/jetson/llama.cpp-mtp/ggml/src/ggml-cuda/'
