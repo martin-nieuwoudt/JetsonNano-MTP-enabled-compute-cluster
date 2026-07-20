@@ -5,20 +5,21 @@
 | Software Component | Architecture | URL |
 |---|---|---|
 | Q-engineering Ubuntu 20.04 Image | ARM64 | [GitHub](https://github.com/Qengineering/Jetson-Nano-image) |
-| llama.cpp | Cross-platform | [GitHub](https://github.com/ggml-org/llama.cpp) |
+| llama.cpp (stable, `b56f079e2`) | Cross-platform | [GitHub](https://github.com/ggml-org/llama.cpp) — retired for MTP; kept as reference build |
+| llama.cpp (MTP, `b9886`/`20a04b2`) | Cross-platform | [GitHub](https://github.com/ggml-org/llama.cpp) — **live fleet build** (CUDA 10.2 / C++14 port on node0) |
 | Telegraf | ARM64 | [InfluxData](https://github.com/influxdata/telegraf/releases) |
 | Eclipse Mosquitto (MQTT) | Cross-platform | [mosquitto.org](https://mosquitto.org/download/) |
 | ZeroMQ | Cross-platform | [GitHub](https://github.com/zeromq/libzmq) |
 | Datadog IoT Agent | ARM64 | [Datadog](https://app.datadoghq.com/account/settings/agent/latest?platform=iot) |
 | SocketXP IoT Agent | ARM64 | [socketxp.com](https://www.socketxp.com/download/) |
 | VS Code Remote - SSH | Windows 11 | [Marketplace](https://marketplace.visualstudio.com/items?itemName=ms-vscode-remote.remote-ssh) |
-| TensorRT | ARM64 | Bundled with JetPack 4.6.1 |
 | NVIDIA Nsight Systems | Windows 11 | [nvidia.com](https://developer.nvidia.com/nsight-systems) |
 | NVIDIA Nsight Compute (nvprof) | ARM64 | Bundled with CUDA 10.2 |
 | jetson-stats (jtop) | ARM64 | `pip3 install jetson-stats` |
 | PyCUDA 2021.1 | ARM64 | `python3 -m pip install --user pycuda==2021.1` (CUDA 10.2, Python 3.8) |
 
-> **Dependency notes:** Azure IoT Edge Runtime, NVIDIA NeMo Framework, and NVIDIA Jetson Device Skills are excluded — not required for RPC inference. SocketXP IoT Agent is included for out-of-band reverse-tunnel SSH. The telemetry stack (Datadog / Telegraf + Mosquitto/ZeroMQ) is scripted in `code/phase11_monitoring.sh` as commented install blocks. **PyCUDA 2021.1** (CUDA 10.2 / Python 3.8) supports the Tier 1/2 distributed-compute workers, and a **FastMCP orchestration server** (`code/mcp/`) exposes RPC + Tier 1 (GEMM/embedding) + Tier 2 (MoE ring) + model-registry tools to the IDE agents (see the dedicated section below).
+> **Dependency notes:** Azure IoT Edge Runtime, NVIDIA NeMo Framework, and NVIDIA Jetson Device Skills are excluded — not required for RPC inference. SocketXP IoT Agent is included for out-of-band reverse-tunnel SSH. The telemetry stack (Datadog / Telegraf + Mosquitto/ZeroMQ) is scripted in `code/phase11_monitoring.sh` as commented install blocks. **PyCUDA 2021.1** (CUDA 10.2 / Python 3.8) supports the Tier 1/2 distributed-compute workers, and a **FastMCP orchestration server** (`code/mcp/`) exposes RPC + Tier 1 (GEMM/embedding) + Tier 2 (MoE ring) + model-registry + simulation-method tools to the IDE agents (see the dedicated section below).
+> **Two llama.cpp trees:** the **PC coordinator** (`C:\llama.cpp-mtp`) and the **node0 fleet tree** (`/home/jetson/llama.cpp-mtp`) are both the MTP build (`b9886`/`20a04b2`). The PC tree is a clean upstream checkout + one RPC-loader patch (`src/llama-model-loader.cpp`, enables `qwen35` MTP loading); the C++17→C++14 / CUDA 10.2 port lives only on the node0 tree. The old `b56f079e2` stable tree (`C:\llama.cpp`) is retained as a reference but is **not** used by the live fleet.
 
 ## Execution Summary
 
@@ -31,7 +32,7 @@
 | 4 | Dependencies | Template Node | Compilers, headers, haveged, NFS client | ✅ |
 | 5 | Compilation | Template Node | Maxwell-targeted RPC binaries | ✅ |
 | 6 | Optimization | Template Node | Hardware clocks, kernel/VMM overrides, firewall + SSH key-only hardening | ✅ |
-| 7 | Daemonization | Template Node | rpc-server (binary) with GPU groups, memory safety | ✅ |
+| 7 | Daemonization | Template Node | ggml-rpc-server (MTP binary) with GPU groups, memory safety | ✅ |
 | 8 | Sanitization | Template Node | Wipe IDs, finalize Worker Baseline image | ✅ |
 | 8b | Health Gate | Template + Cloned | Deep pre-clone health scan (services, binary, SD, clocks, CMA) — ABORT clone on FAIL | ✅ |
 | 9a | Clone | Nano Zero SD | Build golden image (UI kept) = Nano Zero baseline | ✅ |
@@ -41,19 +42,15 @@
 | 9e | Promote | Nano Zero | SSD, NFS server, model storage | ✅ |
 | 9e.1 | Prewarm | All Nodes + Master PC | SSD weight prewarm wired into `cluster_infer.py` (page-cache sweep before RPC upload) | ✅ |
 | 9e.2 | Persistence | 10 Workers | Boot-persistent NFS mount via `fstab` + `systemd.automount` (no boot hang) | ✅ |
-| 10 | Execution | Master PC | RPC inference with `--flash-attn` | ✅ (verified via tiny-qwen smoke + model_sync push) |
+| 10 | Execution | Master PC | RPC inference (dashboard `llama-server.exe` daemon + `llama-cli.exe` client) | ✅ (verified via Qwythos-9B MTP across 11 nodes + model_sync push) |
 | 10.5 | Output Capture | Master PC | Capture + format cluster output (raw .txt / .jsonl / .md) | ✅ |
 | 11 | Monitoring | Master PC | Health check + live dashboard + fault-tolerant watchdog | ✅ (dashboard live at http://localhost:9090) |
 | 12 | IDE Profiling | Master PC | Configure IDE agents for bare-metal diagnostics | ✅ (SSH keys + agent profiles wired) |
 | 12b | Anti-Incast Stability | All Nodes + Master PC | Kill the 11-node connect/weight-upload storm that knocked the interconnect over (2026-07-14 incident) | ✅ (shaper + staged connect + OOM guard, verified 11/11) |
-| 13 | MCP Server | Master PC | FastMCP server (24 tools): RPC + Tier1 + Tier2 + model registry + power | ✅ |
+| 13 | MCP Server | Master PC | FastMCP server (27 tools): RPC + Tier1 + Tier2 + model registry + power + simulation methods | ✅ |
 | 14 | PyCUDA Workers | Template Node | Install PyCUDA; GEMM/embedding/ring workers deploy at runtime via SCP | ✅ (PyCUDA on node0; workers runtime) |
 | 15 | Power Management | Master PC + Dashboard | Distinct "OS Shutdown" (graceful SSH halt) vs Sonoff/Alexa 5V power; watchdog stand-down flag | ✅ |
-
-> **Status notes (2026-07-20, updated):**
-> - **Dashboard backend/frontend sync — FIXED.** `code/cluster_telemetry.py` + `code/cluster_server.py` audited and corrected: `_RESIDENT_SAMPLING` now persists from model load through chat and ensemble (sampling no longer silently resets to defaults); ensemble path uses `_RESIDENT_SAMPLING` + UI ctx/sampling (was hardcoded `temperature: 0.7` / `--ctx-size 2048`); `cmd_ensemble_start` added to `cluster_server.py` (was referenced by argparse but undefined → ensemble mode crashed); duplicate `btnLoad` handler removed (single unified handler now drives single + ensemble load); model-status notification moved below the Load/Eject/Reset buttons (no longer forces `.samp-group` to wrap); chat area broadened to fill the viewport (flex-grow, removed fixed `max-height:160px` cap). Deterministic sampling profile `temp 0.1 / min_p 0.05 / top_p 0.9 / repeat_penalty 1.1` (from `code/mcp/cluster_settings.json`) is now enforced end-to-end and unchanged.
-> - **PC build tree audit (`C:\llama.cpp-mtp`):** clean upstream checkout at tag `b9886` (commit `20a04b2`) with exactly ONE local modification — `src/llama-model-loader.cpp` (`weight_buft_supported()`, 15-line RPC loader patch enabling `qwen35` MTP loading). The extensive C++17→C++14 CUDA port (Phases A–F) lives on the **node0 tree** `/home/jetson/llama.cpp-mtp`, not the PC tree. Reconciled with `MTP CUDA Enablement Work Plan.md` and `MTP_CUDA_STATUS.md`.
-> - **Stale binary cleanup:** removed `llama-cli.exe.bak`, `llama-cli.exe.gs_stack`, `llama-cli.exe.norpc_bad` from `C:\llama.cpp-mtp\build\bin\` (dead experiment variants, unreferenced in `code/`). Live `llama-cli.exe` + `llama-server.exe` + `ggml-rpc-server.exe` retained.
+| 16 | MTP CUDA Enablement | node0 + PC | C++17→C++14 / CUDA 10.2 port of the MTP source tree; serve MTP models (Qwythos-9B) across all 11 nodes | ✅ (built, validated, deployed — see `MTP CUDA Enablement Work Plan.md`) |
 
 ## Pre-Flight Checklist
 
@@ -68,15 +65,15 @@
 ### Network
 - [x] DHCP reservation range `192.168.50.150`-`192.168.50.160`
 - [x] Master PC static IP/DHCP reservation on same subnet
-- [x] MAC addresses recorded and labeled per board
+- [ ] MAC addresses recorded and labeled per board
 
 ### Software & Tools
 - [x] Qengineering image downloaded & verified (SHA256)
-- [x] Visual Studio 2022 + CUDA Toolkit 13.3.1 + GPU driver >= 575.x
+- [x] Visual Studio 2022 (MSVC 19.44) for the PC `llama-cli.exe` / `llama-server.exe` CPU-only build (no PC CUDA needed — compute runs on the Nanos)
 - [x] CMake >= 3.18, Git, WSL2 + Ansible
-- [x] Model GGUF files at `C:\Models\`
+- [x] Model GGUF files at `C:\Models\` (Qwythos-9B-MTP-Q8_0 is the live model)
 - [x] USB SD card reader, Win32DiskImager or `dd`
-- [x] `pip install paramiko psutil requests`
+- [x] `pip install paramiko psutil requests` (dashboard deps; `paramiko` must be under the interpreter that runs the dashboard)
 
 ## Power & Cooling
 
@@ -111,9 +108,9 @@
 
 ## Assumptions
 
-- Master PC SSD: **Qwen 2.5 72B Instruct (IQ3_XS, ~29.5 GB)** + **Llama 3.3 70B Instruct (IQ3_XS, ~29.3 GB)** at `C:\Models\`
-- Additional models in the registry (see MCP/PyCUDA section B.6): **Codestral-22B-v0.1 (Q8_0, ~23.6 GB)** — fits PC directly, the "one more model" downloaded; **DeepSeek-Coder-V2-Lite (Q4_K_M, 16B total / 2.4B active MoE)** — Tier 2 ring target
-- Master PC: CUDA 13.3, GPU >= 575.x, VS2022, CMake >= 3.18
+- **Live model:** `Qwythos-9B-Claude-Mythos-5-1M-MTP-Q8_0.gguf` (qwen35 arch, MTP draft heads, ~9.5 GB) — served across all 11 nodes via the MTP stack. This is the model the dashboard loads by default.
+- Registry also holds (see MCP section B.6): **Qwen 2.5 72B IQ3_XS (~29.5 GB)** + **Llama 3.3 70B IQ3_XS (~29.3 GB)** at `C:\Models\` (dense, RPC layer-piping — require the MTP build too, since `qwen35`/`qwen2` arch needs the patched loader); **Codestral-22B-v0.1 (Q8_0, ~23.6 GB)** — fits PC directly; **DeepSeek-Coder-V2-Lite (Q4_K_M, 16B total / 2.4B active MoE)** — Tier 2 ring target; **DeepSeek-R1-Distill-Qwen-32B (Q6_K_L, ~27.3 GB)** — pushed to node0 SSD.
+- Master PC: VS2022 (MSVC 19.44), CMake >= 3.18. **No PC CUDA** — the PC is a CPU-only RPC client/coordinator; GPU compute runs on the Nanos.
 - 11x Jetson Nano (Maxwell sm_53), Gigabit switch, `192.168.50.150`-`192.168.50.160`
 - Nano Zero (`192.168.50.150`) = NFS server. Workers 1-10 = RPC compute only
 - VS Code as primary IDE
@@ -122,31 +119,33 @@
 
 ## Process
 
-### Phase 1: Master PC (Windows) Compilation — RPC CLIENT (CPU-only, NO CUDA)
+### Phase 1: Master PC (Windows) Compilation — RPC COORDINATOR (CPU-only, NO CUDA)
 
-> **Design intent:** The PC is a pure RPC *client*. It does NOT run GPU math — it
-> slices the model graph and ships tensor chunks to the Jetson Nano RPC servers,
-> which do the Maxwell GPU compute. This keeps the RTX 5060 completely free for
+> **Design intent:** The PC is a pure RPC *coordinator*. It does NOT run GPU math — it
+> slices the model graph and ships tensor chunks to the Jetson Nano RPC servers
+> which do the Maxwell GPU compute. This keeps the PC's GPU completely free for
 > other work while a batch job is submitted to the cluster. The PC therefore builds
-> with `GGML_CUDA=OFF`. The binary is `llama-cli.exe` (the RPC client), NOT
-> `llama-server.exe`.
+> with `GGML_CUDA=OFF`. The build produces **two** binaries: `llama-cli.exe` (the
+> one-shot RPC client, used for CLI runs and the dashboard's legacy path) and
+> `llama-server.exe` (a **persistent HTTP daemon** — the dashboard launches this once
+> on Load and serves all chats through its `/completion` endpoint, avoiding a
+> per-prompt model reload).
 
 - **Prerequisite:** VS2022/VS2026 (18.x) with C++ workload, CMake >= 3.18 (Strawberry Perl Ninja works fine for the CPU-only build), Git
-- **CRITICAL:** Build from the **SAME commit as the Nano** (`b56f079e2`). The RPC wire protocol changes between commits, so client and server MUST match exactly or the connection fails.
-- Clone: `git clone https://github.com/ggml-org/llama.cpp.git C:\llama.cpp`
-- Checkout: `cd C:\llama.cpp && git checkout b56f079e2`
+- **CRITICAL:** Build from the **SAME commit as the Nano** (`b9886`/`20a04b2` for the MTP fleet). The RPC wire protocol changes between commits, so client and server MUST match exactly or the connection fails. The live fleet uses the **MTP build** (`C:\llama.cpp-mtp`), not the old `b56f079e2` stable tree.
+- Clone: `git clone https://github.com/ggml-org/llama.cpp.git C:\llama.cpp-mtp`
+- Checkout: `cd C:\llama.cpp-mtp && git checkout 20a04b2`
+- **One source patch required (MTP model loading):** `src/llama-model-loader.cpp` — in `weight_buft_supported()`, add the `qwen35` weight-buffer type (15-line patch) so the MTP `qwen35` architecture loads over RPC. This is the ONLY local modification on the PC tree; the C++17→C++14 / CUDA 10.2 port lives on the node0 tree (see `MTP CUDA Enablement Work Plan.md`).
 - Activate x64 MSVC: `call "C:\Program Files (x86)\Microsoft Visual Studio\18\BuildTools\VC\Auxiliary\Build\vcvarsall.bat" x64` (or `VsDevCmd.bat -vcvars_ver=14.44 -arch=x64`)
 - **CMake (CPU-only + RPC):**
   ```
-  cd C:\llama.cpp\build
-  cmake -G Ninja -DCMAKE_BUILD_TYPE=Release -DGGML_CUDA=OFF -DGGML_RPC=ON -DBUILD_SHARED_LIBS=ON -DCMAKE_C_COMPILER=cl -DCMAKE_CXX_COMPILER=cl C:\llama.cpp
+  cd C:\llama.cpp-mtp\build
+  cmake -G Ninja -DCMAKE_BUILD_TYPE=Release -DGGML_CUDA=OFF -DGGML_RPC=ON -DBUILD_SHARED_LIBS=ON -DCMAKE_C_COMPILER=cl -DCMAKE_CXX_COMPILER=cl C:\llama.cpp-mtp
   cmake --build . --config Release
   ```
-- **2 source patches required (MSVC strictness at this old commit):** add `#include <chrono>` to `common/common.h` and `common/log.cpp` (several files use `std::chrono` without including it). Apply BEFORE configure.
-- Result: `C:\llama.cpp\build\bin\llama-cli.exe` (has `--rpc`, `--flash-attn`, `-cnv`, **and `--mlock`**; NO `-no-cnv`). Note: `--mlock` exists on the **PC client** but NOT on the Nano `rpc-server` (see Appendix A.0).
+- Result: `C:\llama.cpp-mtp\build\bin\llama-cli.exe` (one-shot RPC client) **and** `C:\llama.cpp-mtp\build\bin\llama-server.exe` (persistent daemon the dashboard uses). Both are MTP-aware (`qwen35` arch).
 - **Windows TCP Tuning:** Run `code/windows_tcp_tuning.ps1` as Administrator
-- Full script: `code/pc_build/build_cpu_rpc.bat`
-- **`--flash-attn` is mandatory** in all execution strings (supported by `b56f079e2` on the PC client)
+- Full script: `code/pc_build/build_cpu_rpc.bat` (update the path to `C:\llama.cpp-mtp` if it still references the old tree)
 
 ### Phase 2: Orchestration Prerequisites (Master PC)
 
@@ -176,17 +175,20 @@
 
 ### Phase 5: Targeted Compilation (Template Node)
 
+> **Live build = MTP (`b9886`/`20a04b2`).** The fleet runs the MTP source tree ported to
+> CUDA 10.2 / C++14. The full port recipe (Phases A–F: the `llamita.cpp` lineage lift, BF16
+> shim, backend/buffer interface sync, return-type fixes, FA/Blackwell exclusions + `fa-stub.cu`)
+> is documented in **`MTP CUDA Enablement Work Plan.md`** — that is the authoritative build
+> record for the live fleet. The notes below cover the **stable `b56f079e2` reference build**
+> (retained as a fallback; it produces the `rpc-server` binary and does NOT serve MTP models).
+
 - **NEVER** do `mkdir build && cd build` before `cmake -B build` (creates nested `build/build/`)
-- Clone repo, checkout commit **`b56f079e2`** (tag `b4418`, 2025-01-04 — last commit before `46e3556e0` "CUDA: add BF16 support", which introduced `cuda_bf16.h` requiring CUDA 11.0+. JetPack 4.6.1 is locked to CUDA 10.2, so any newer commit fails to compile on the Nano)
-- Apply **4** NVCC 10.2 compatibility patches (listed in full in the **Build Recipe** appendix at the end of this document):
-  1. `ggml/src/ggml-cuda/common.cuh`: `static constexpr __device__ int8_t kvalues_iq4nl` → `static const __device__`
-  2. `ggml/src/ggml-cuda/fattn-common.cuh`: `__builtin_assume(tid < D)` → `GGML_CUDA_ASSUME(tid < D)`
-  3. `ggml/src/ggml-cuda/fattn-vec-f16.cuh`: same `__builtin_assume` → `GGML_CUDA_ASSUME` fix
-  4. `ggml/src/ggml-cuda/fattn-vec-f32.cuh`: same `__builtin_assume` → `GGML_CUDA_ASSUME` fix
-- **Compiler split (critical):** host C/CXX = **gcc-9** (provides `vld1q_u8_x4` NEON intrinsic missing from gcc-8's `arm_neon.h`); nvcc pinned to **gcc-8** via `--compiler-bindir /usr/bin/gcc-8` (nvcc 10.2 rejects gcc > 8)
-- **Script:** `code/phase5_compilation.sh` — MUST use the `b56f079e2` recipe (4 patches, gcc-9 host + gcc-8 nvcc bindir, `armv8.1-a+nolse`, `GGML_NATIVE=OFF`). Older recipes (e.g. `667d72846`) are not applicable at this commit.
-- Verify: `./build/bin/rpc-server --help`  ← **binary is `rpc-server`, NOT `llama-rpc-server`** (that name only exists in much newer commits)
-- **Do NOT pass `--mlock`** to `rpc-server` at this commit (unsupported; use `mlockall_wrapper` setuid helper if memory locking is needed)
+- **MTP build (live):** clone `llama.cpp` at `20a04b2`, apply the C++17→C++14 / CUDA 10.2 port from `MTP CUDA Enablement Work Plan.md`, configure with `GGML_CUDA=ON -DGGML_RPC=ON` + the gcc-9-host/gcc-8-nvcc split + `armv8.1-a+nolse` + `GGML_NATIVE=OFF`, build target `ggml-rpc-server`. Binary: `build/bin/ggml-rpc-server` (NOT `rpc-server`).
+- **Stable `b56f079e2` (reference fallback):** checkout commit **`b56f079e2`** (tag `b4418`, 2025-01-04 — last commit before `46e3556e0` "CUDA: add BF16 support", which introduced `cuda_bf16.h` requiring CUDA 11.0+. JetPack 4.6.1 is locked to CUDA 10.2, so any newer commit fails to compile on the Nano). Apply the **4** NVCC 10.2 compatibility patches (Appendix A.2). Binary: `build/bin/rpc-server`.
+- **Compiler split (critical, both builds):** host C/CXX = **gcc-9** (provides `vld1q_u8_x4` NEON intrinsic missing from gcc-8's `arm_neon.h`); nvcc pinned to **gcc-8** via `--compiler-bindir /usr/bin/gcc-8` (nvcc 10.2 rejects gcc > 8)
+- **Script:** `code/phase5_compilation.sh` — update to the MTP recipe (ggml-rpc-server target). The old `b56f079e2` recipe (4 patches, gcc-9 host + gcc-8 nvcc bindir, `armv8.1-a+nolse`, `GGML_NATIVE=OFF`) is the reference fallback.
+- Verify MTP: `./build/bin/ggml-rpc-server --help`  ← **binary is `ggml-rpc-server`** (the MTP build); the stable `b56f079e2` build produces `rpc-server` (no `ggml-` prefix).
+- **Do NOT pass `--mlock`** to either binary at these commits (unsupported; use `mlockall_wrapper` setuid helper if memory locking is needed)
 - **TensorRT offload:** `trtexec --onnx=model.onnx --saveEngine=model.engine --fp16` for embedding/token tasks
 
 ### Phase 6: System Optimization & Networking (Template Node)
@@ -196,7 +198,7 @@
   ```bash
   # SSH key-only first (see hardening note below), then firewall
   sudo ufw allow 22/tcp      # SSH (key auth only)
-  sudo ufw allow 50052/tcp   # llama.cpp rpc-server
+  sudo ufw allow 50052/tcp   # llama.cpp ggml-rpc-server (MTP)
   sudo ufw allow 2049/tcp    # NFS (Nano Zero model store, Phase 9e)
   sudo ufw allow 111/tcp     # rpcbind
   sudo ufw --force enable
@@ -227,9 +229,9 @@
 
 ### Phase 7: Daemon Configuration (Template Node)
 
-- Create `llama-rpc.service` (systemd unit name) that launches the **`rpc-server`** binary with `Groups=video,crypto`, memory limits, auto-restart
-- **Script:** `code/phase7_daemon.sh` — `ExecStart=/home/jetson/llama.cpp/build/bin/rpc-server --host 0.0.0.0 --port 50052 -m 3000` (node0 template; the `-m 3000` is the Nano Zero value — see per-node `-m` below). The worker copy (9b) bumps this to `-m 3600`.
-- **Per-node `-m` (backend memory buffer) — MANDATORY and DIFFERENT per node:** The Jetson is UMA (no discrete VRAM). Without `-m`, `rpc-server` falls back to `ggml_backend_cuda_get_device_memory`, which on the Tegra X1 returns only the tiny CUDA carveout (~14 MB free per `NvMapMemFree`) — so the node reports almost no memory and gets almost no layers. **Always pass `-m`.** node0 (Nano Zero, GUI/display server kept) shares that unified RAM with the desktop, so give it a SMALLER buffer than the headless workers: node0 `-m 3000`, workers `-m 3600`. The PC client (`llama-cli.exe --rpc`) shards layers proportionally to each server's reported `-m` (default `LLAMA_SPLIT_MODE_LAYER`, split by free memory), so a smaller node0 value automatically assigns node0 fewer layers. See Appendix A.4 for the per-node table.
+- Create `llama-rpc-mtp.service` (systemd unit name) that launches the **`ggml-rpc-server`** binary with `Groups=video,crypto`, memory limits, auto-restart. (The old stable build used `llama-rpc.service` + `rpc-server`; the live fleet uses the MTP service + `ggml-rpc-server`.)
+- **Script:** `code/phase7_daemon.sh` — `ExecStart=/home/jetson/llama.cpp-mtp/build/bin/ggml-rpc-server -H 0.0.0.0 -p 50052 -t 4 -m 3000` (node0 template; the `-m 3000` is the Nano Zero value — see per-node `-m` below). The worker copy (9b) bumps this to `-m 3600`. The hardened deploy script `code/install_rpc_service.sh` writes `llama-rpc-mtp.service` and asserts the MTP binary exists (regression-impossible).
+- **Per-node `-m` (backend memory buffer) — MANDATORY and DIFFERENT per node:** The Jetson is UMA (no discrete VRAM). Without `-m`, `ggml-rpc-server` falls back to `ggml_backend_cuda_get_device_memory`, which on the Tegra X1 returns only the tiny CUDA carveout (~14 MB free per `NvMapMemFree`) — so the node reports almost no memory and gets almost no layers. **Always pass `-m`.** node0 (Nano Zero, GUI/display server kept) shares that unified RAM with the desktop, so give it a SMALLER buffer than the headless workers: node0 `-m 3000`, workers `-m 3600`. The PC client (`llama-cli.exe --rpc`) shards layers proportionally to each server's reported `-m` (default `LLAMA_SPLIT_MODE_LAYER`, split by free memory), so a smaller node0 value automatically assigns node0 fewer layers. See Appendix A.4 for the per-node table.
 - **Python GC prevention:** `code/python_gc_prevention.py` (`gc.disable()`, `malloc_trim(0)`)
 - **Thread pinning (Core 0):** `os.sched_setaffinity(0, {0})`
 - **Zero-copy CUDA:** `code/zero_copy_cuda_allocation.cu` (`cudaHostAllocMapped`)
@@ -287,17 +289,19 @@
 
 ### Phase 10: Execution (Master PC)
 
-- **Target models:** Qwen 2.5 72B IQ3_XS (coding), Llama 3.3 70B IQ3_XS (reasoning)
-- **Reject MoE variants** -- erratic latency on sparse expert layers
-- **Client binary:** `C:\llama.cpp\build\bin\llama-cli.exe` (CPU-only RPC client built in Phase 1)
-- **Full cluster command (single instance, 70B dense):**
+> **Primary path (live):** use the **dashboard** — `code/cluster_telemetry.py web` (http://localhost:9090). Click **Load** (launches the persistent `llama-server.exe` daemon with the Qwythos-9B MTP model across all 11 nodes), then chat in the UI. The dashboard owns model load, sampling (`temp 0.1 / min_p 0.05 / top_p 0.9 / repeat_penalty 1.1` from `code/mcp/cluster_settings.json`), and the HTTP `/completion` fan-out. This is the supported way to run the cluster.
+>
+> **Manual CLI path (advanced):** the `llama-cli.exe` one-shot client still works for scripted runs.
+
+- **Live model:** `Qwythos-9B-Claude-Mythos-5-1M-MTP-Q8_0.gguf` (qwen35 arch, MTP draft heads) — served across all 11 nodes via the MTP stack. Other registry models (72B/70B dense, Codestral-22B, DeepSeek variants) also run on the MTP build.
+- **Coordinator binaries (Phase 1):** `C:\llama.cpp-mtp\build\bin\llama-server.exe` (persistent daemon, used by the dashboard) and `C:\llama.cpp-mtp\build\bin\llama-cli.exe` (one-shot RPC client).
+- **Full cluster command (one-shot `llama-cli.exe`, Qwythos-9B MTP):**
   ```
-  C:\llama.cpp\build\bin\llama-cli.exe -m C:\Models\Qwen2.5-72B-Instruct-IQ3_XS.gguf --flash-attn --rpc 192.168.50.150:50052,192.168.50.151:50052,192.168.50.152:50052,192.168.50.153:50052,192.168.50.154:50052,192.168.50.155:50052,192.168.50.156:50052,192.168.50.157:50052,192.168.50.158:50052,192.168.50.159:50052,192.168.50.160:50052 --tensor-split 0.85,1,1,1,1,1,1,1,1,1,1 --ctx-size 8192
+  C:\llama.cpp-mtp\build\bin\llama-cli.exe -m C:\Models\Qwythos-9B-Claude-Mythos-5-1M-MTP-Q8_0.gguf --rpc 192.168.50.150:50052,192.168.50.151:50052,192.168.50.152:50052,192.168.50.153:50052,192.168.50.154:50052,192.168.50.155:50052,192.168.50.156:50052,192.168.50.157:50052,192.168.50.158:50052,192.168.50.159:50052,192.168.50.160:50052 --tensor-split 0.85,1,1,1,1,1,1,1,1,1,1 --ctx-size 4096
   ```
   > **`--tensor-split` (handles node0's lower headroom):** The 11 values map 1:1 to the `--rpc` servers in order (node0 first). Default split is proportional to each server's reported `-m`, but an explicit `--tensor-split` overrides the free-memory probe entirely. node0 (Nano Zero, GUI kept) gets `0.85` of a worker's share; the 10 headless workers get `1`. This is the cleanest way to keep node0 from OOMing while still using all 11 nodes. If you instead tune per-node `-m` (Appendix A.4), you can drop `--tensor-split` and let the proportional split do it — but keep one or the other.
-  > NOTE: `phase10_execution.ps1` in `code/` uses the correct `llama-cli.exe --rpc` form (CPU-only client, NOT a CUDA `llama-server`). The server is the Nano `rpc-server` (Phase 5/7). The canonical, agent-facing entry point is `code/cluster_infer.py`, which adds `--tensor-split 0.85,1,1,...` (node0 headroom) and the QoS guards.
-- 70B IQ3_XS needs all 11 nodes (~33-35 GB pool). No sub-cluster configuration is viable at this size — the model won't fit on fewer than 10 nodes.
-- **Smoke test (single node):** `C:\llama.cpp\build\bin\llama-cli.exe -m C:\Models\tiny_test\qwen0.5b-q4km.gguf -p "Hello" -n 20 --rpc 192.168.50.150:50052` → coherent generation, ~102 tok/s eval on the Nano. If the `rpc-server` is not running, the client fails with `Failed to connect to 192.168.50.150:50052` (the Maxwell GPU does the compute; there is no local fallback).
+  > NOTE: `phase10_execution.ps1` in `code/` uses the `llama-cli.exe --rpc` form (CPU-only coordinator, NOT a CUDA `llama-server`). The server is the Nano `ggml-rpc-server` (Phase 5/7). The canonical, agent-facing entry point is `code/cluster_infer.py`, which adds `--tensor-split 0.85,1,1,...` (node0 headroom) and the QoS guards.
+- **Smoke test (single node):** `C:\llama.cpp-mtp\build\bin\llama-cli.exe -m C:\Models\Qwythos-9B-Claude-Mythos-5-1M-MTP-Q8_0.gguf -p "Hello" -n 20 --rpc 192.168.50.150:50052` → coherent generation. If the `ggml-rpc-server` is not running, the client fails with `Failed to connect to 192.168.50.150:50052` (the Maxwell GPU does the compute; there is no local fallback).
 
 ### Phase 10.5: Capturing & Formatting Output
 
@@ -307,11 +311,14 @@
 > is where the generated text actually lands (its stdout). So "retrieving output" is a
 > **PC-side capture + formatting** problem, NOT a Nano retrieval problem. Nothing needs
 > to be pulled off the Nano; the answer is already on your screen / in your log file.
+>
+> **Primary capture path (live):** the dashboard (`code/cluster_telemetry.py web`) keeps a
+> running chat transcript in the browser and exposes Load/Eject/Reset + single + ensemble
+> chat. For scripted/auditable capture, use the `llama-cli.exe` tiers below.
 
 #### Where the output lives
 - `llama-cli.exe` prints the generated text to **stdout on the Master PC**. The Nano
-  never stores it. There is **no `--output-file` flag at commit `b56f079e2`** — capture
-  is done with `--log-file` or a shell redirect (`>`).
+  never stores it. Capture is done with `--log-file` or a shell redirect (`>`).
 - Available capture/format flags on the client (verified from `--help`):
   - `--log-file FNAME` — mirror all output (prompt + generation) to a file.
   - `-f, --file FNAME` — read the **prompt** from a file (keeps your command line clean and lets you version prompts).
@@ -326,10 +333,10 @@
 2. **Logged run (recommended default)** — add `--log-file` + `--no-display-prompt` and
    redirect, so every job is reproducible and auditable:
    ```
-   C:\llama.cpp\build\bin\llama-cli.exe -m C:\Models\Qwen2.5-72B-Instruct-IQ3_XS.gguf `
-     --flash-attn --no-display-prompt --log-file C:\Outputs\run_2026-07-10_q3.jsonl `
+   C:\llama.cpp-mtp\build\bin\llama-cli.exe -m C:\Models\Qwythos-9B-Claude-Mythos-5-1M-MTP-Q8_0.gguf `
+     --no-display-prompt --log-file C:\Outputs\run_2026-07-10_q3.jsonl `
      --rpc 192.168.50.150:50052,192.168.50.151:50052,...(all 11)... `
-     --tensor-split 0.85,1,1,1,1,1,1,1,1,1,1 --ctx-size 8192 `
+     --tensor-split 0.85,1,1,1,1,1,1,1,1,1,1 --ctx-size 4096 `
      -f C:\Prompts\q3_prompt.txt -n 1024 `
      > C:\Outputs\run_2026-07-10_q3.txt 2>&1
    ```
@@ -346,7 +353,7 @@
   command. Example:
   ```
   pwsh code\phase10_capture.ps1 -PromptFile C:\Prompts\q3_prompt.txt `
-    -Model C:\Models\Qwen2.5-72B-Instruct-IQ3_XS.gguf -GrammarFile C:\Grammars\answer.json.gbnf
+    -Model C:\Models\Qwythos-9B-Claude-Mythos-5-1M-MTP-Q8_0.gguf -GrammarFile C:\Grammars\answer.json.gbnf
   ```
 - **Output sink:** because Nano Zero already serves an NFS share, the PC can write
   finished `.md`/`.json` reports into that share so any node (or another PC) can read the
@@ -367,7 +374,7 @@
   python code\run_rpc_stress.py --rpc 192.168.50.150:50052 --loop
   python code\cluster_telemetry.py web   # then open http://localhost:9090
   ```
-  The runner launches `llama-cli.exe --rpc ...`, parses its `tokens per second` line, and writes `rpc_metrics.json` (atomic). The dashboard shows `Idle` when no run is active.
+  The runner launches `C:\llama.cpp-mtp\build\bin\llama-cli.exe --rpc ...`, parses its `tokens per second` line, and writes `rpc_metrics.json` (atomic). The dashboard shows `Idle` when no run is active. (The primary dashboard path uses the persistent `llama-server.exe` daemon, whose tok/s is reported by the dashboard's own chat loop; the stress runner is the standalone benchmark path.)
 - **Memory label note (UMA accuracy):** the dashboard's per-node card shows **"RAM avail (UMA)"** and the summary shows **"Total RAM (UMA)"**. The Jetson Nano has no discrete VRAM -- CPU and GPU share 4 GB LPDDR4, so these figures are `MemAvailable` (unified RAM), not GPU VRAM. The SD card is storage only and cannot expand memory. This label is intentional; do not change it to VRAM.
 - **Node status semantics (dashboard colours):** each node card's left border and badge reflect its status:
   | Status | Meaning | Border |
@@ -395,7 +402,7 @@
 
 > **Core principle — two distinct concerns, never conflated:**
 > 1. **OS Shutdown** = graceful halt of the 11 boards' operating systems (stop
->    `rpc-server`, unmount NFS, `sync`, `shutdown -h now`). This is a **software**
+>    `ggml-rpc-server` (or `systemctl stop llama-rpc-mtp.service`), unmount NFS, `sync`, `shutdown -h now`). This is a **software**
 >    action the dashboard button drives. The button is labelled **"OS Shutdown"**,
 >    never "Power Off", so nobody mistakes a graceful halt for a hard power cut.
 > 2. **Power (5V cut / restore)** = a **Sonoff switch** on the cluster's 5V rail,
@@ -429,7 +436,7 @@
      import `get_cluster_mode()` / `set_cluster_mode()`.
    - **Order: workers (1–10) FIRST, node0 (NFS server) LAST** — workers unmount
      node0's NFS cleanly instead of hanging on a dead server.
-   - Per node: `pkill rpc-server` → `umount /mnt/nano-ssd` → `sync` → `shutdown -h now`.
+   - Per node: `pkill ggml-rpc-server` (or `systemctl stop llama-rpc-mtp.service`) → `umount /mnt/nano-ssd` → `sync` → `shutdown -h now`.
    - Returns per-node result (acknowledged / timeout / unreachable) — not a binary done.
 2. **You (optional):** "Alexa, turn off cluster" → Sonoff cuts 5V for true zero-power.
 
@@ -444,7 +451,8 @@
 |------|--------|
 | `code/mcp/cluster_config.py` | Added `CLUSTER_STATE_FILE`, `CLUSTER_MODE_*`, `get_cluster_mode()` / `set_cluster_mode()` (single source of truth for the flag) |
 | `code/cluster_watchdog.py` | Reads `get_cluster_mode()`; stands down (no re-slice/re-admit) while `maintenance` |
-| `code/mcp/cluster_mcp_server.py` | Added `cluster.power.*` namespace: `power_os_shutdown(confirm)`, `power_on_verify(timeout_s)` (tools 23–24) |
+| `code/mcp/cluster_mcp_server.py` | Added `cluster.power.*` namespace: `power_os_shutdown(confirm)`, `power_on_verify(timeout_s)` (tools 23–24); later `cluster.method.*` added tools 25–27 |
+
 
 ---
 
@@ -464,7 +472,7 @@
 - `code/apply_rpc_shaper.sh` — idempotent `tc` HTB qdisc on `eth0` that caps
   RPC-port (50052) egress at **850 Mbit** with a **64 KB burst bucket**, smoothing
   the incast spike so a single node can never flood the switch.
-- `code/llama-rpc-shape.service` — root `oneshot`, ordered **`Before=llama-rpc.service`**
+- `code/llama-rpc-shape.service` — root `oneshot`, ordered **`Before=llama-rpc-mtp.service`**
   (and `Wants=network-online.target`), so the shaper is live **before** the daemon
   binds the port on every boot. `RemainAfterExit=yes` keeps it asserted.
 - Tunables live ONLY in `code/mcp/cluster_config.py` (`RPC_SHAPER_*` block):
@@ -509,10 +517,10 @@
 | `code/nvme_swap_tasks.yml` | Ansible swap-file tasks (append to playbook) |
 | `code/hosts.ini` | Ansible inventory |
 | `code/ssh_config.txt` | Windows SSH config for all 11 nodes |
-| `code/mcp/cluster_mcp_server.py` | MCP server (24 tools) wrapping RPC + Tier1 + Tier2 + model registry + power |
+| `code/mcp/cluster_mcp_server.py` | MCP server (27 tools) wrapping RPC + Tier1 + Tier2 + model registry + power + method |
 | `code/mcp/cluster_config.py` | Single source of truth (nodes / ports / models / SSH) imported by the server |
 | `code/apply_rpc_shaper.sh` | Idempotent `tc` egress shaper for the RPC port (Phase 12b, anti-incast) |
-| `code/llama-rpc-shape.service` | systemd oneshot, `Before=llama-rpc.service`, applies the shaper on boot (Phase 12b) |
+| `code/llama-rpc-shape.service` | systemd oneshot, `Before=llama-rpc-mtp.service`, applies the shaper on boot (Phase 12b) |
 | `code/install_rpc_service.sh` | Hardened deploy: MTP daemon + shaper, deletes old unit, asserts MTP binary (Phase 12b) |
 | `code/verify_fleet.sh` | Per-node proof that all 3 failure modes are fixed (Phase 12b) |
 | `code/mcp/workers/jetson_worker.py` | Tier 1 GEMM worker (port 9999) — SCP-pushed to Jetsons at runtime |
@@ -567,12 +575,8 @@ node0 model dir, SSH identity) live ONLY in `code/mcp/cluster_config.py` (`MODEL
 | `code/model_sync.py` | Registry-driven wrapper: `download <key>` / `verify <key>` / `push <key>`. Forwards to `dl_generic_model.py`; SCPs GGUF+sidecar to node0. | canonical |
 | `code/sync_model.ps1` | **The only** PowerShell sync tool: `-Model <key> [-Direction PCtoNode0\|Node0toPC] [-VerifyOnly]`. Resolves paths from `cluster_config`. | canonical |
 | `code/resume_after_cooldown.ps1` | Cooldown-resume: relaunches `model_sync.py download <key>` detached after a corrupt download. | canonical |
-| `code/dl_llama_pc.py` | DEPRECATED shim → `model_sync.py download llama-3.3-70b-iq3_xs` | shim |
-| `code/dl_node0.py` | DEPRECATED shim → `model_sync.py download qwen2.5-72b-iq3_m` | shim |
-| `code/fetch_qwen_all_pc.py` | DEPRECATED shim → `model_sync.py download qwen2.5-72b-iq3_m` | shim |
-| `code/fetch_qwen_part0_pc.py` | DEPRECATED shim → `model_sync.py download qwen2.5-72b-iq3_m` | shim |
 
-**Removed (do not recreate):** `dl_node0.sh`, `dl_parallel_node0.sh`, `scp_qwen_to_node0.ps1`, `verify_qwen_node0.ps1`, `download_orchestrator.ps1`, `tegrastats_telemetry.py` (orphan; tegrastats already owned by `cluster_telemetry.py`).
+**Removed (do not recreate):** `dl_node0.sh`, `dl_parallel_node0.sh`, `scp_qwen_to_node0.ps1`, `verify_qwen_node0.ps1`, `download_orchestrator.ps1`, `tegrastats_telemetry.py` (orphan; tegrastats already owned by `cluster_telemetry.py`). Also removed: the deprecated download shims `dl_llama_pc.py`, `dl_node0.py`, `fetch_qwen_all_pc.py`, `fetch_qwen_part0_pc.py` (superseded by `model_sync.py` / `sync_model.ps1`).
 
 **Sidecar convention (canonical):** `<basename>.gguf.sha256` containing `"<hexhash>  <basename>"`
 (two spaces). Written by `dl_generic_model.py` / `model_sync.py`; read by `cluster_qos.preflight_model_hash`
@@ -605,14 +609,14 @@ PC→node0 (push). `Node0toPC` is explicit recovery only.
 
 | Port | Owner | Purpose |
 |------|-------|---------
-| 50052 | llama.cpp `rpc-server` | Dense 70B layer-piping (RPC) |
+| 50052 | llama.cpp `ggml-rpc-server` (MTP) | Dense + MTP model layer-piping (RPC) |
 | 9999 | Tier 1 GEMM worker | FP16 matrix self-mul (`A @ A^T`) |
 | 9998 | Tier 1 embedding worker | token-id → float16 embedding projection |
 | 8888 | Tier 2 ring worker | MoE expert-parallel ring |
 
 All four are defined in `cluster_config.py` (`RPC_PORT`, `GEMM_PORT`, `EMBED_PORT`, `RING_PORT`). RPC stays on 50052; the PyCUDA workers use the other three.
 
-### B.2 MCP tool namespaces (22 tools)
+### B.2 MCP tool namespaces (27 tools)
 
 | Namespace | Tools | Purpose |
 |-----------|-------|---------
@@ -623,6 +627,7 @@ All four are defined in `cluster_config.py` (`RPC_PORT`, `GEMM_PORT`, `EMBED_POR
 | `cluster.ring.*` | `ring_push_workers`, `ring_start_workers`, `ring_stop_workers`, `ring_run(model_key, batches)` | Tier 2 MoE expert-parallel ring |
 | `cluster.model.*` | `model_list`, `model_download(model_key, segments, stagger)` | Model registry + resumable download |
 | `cluster.power.*` | `power_os_shutdown(confirm)`, `power_on_verify(timeout_s)` | OS Shutdown (graceful SSH halt, workers-first/node0-last) + power-on verify (poll + watchdog re-arm) |
+| `cluster.method.*` | `method_list`, `method_run(method, node_ip="", overrides="", timeout_s=120)`, `method_push` | Anti-Dark-Forest simulation methods (marl, montecarlo, kl_div, …) — list, run locally or on a node, push |
 
 All tools read changeable values from `cfg.*` (43 references verified). No hardcoded node IPs/ports in tool logic. The `cluster.power.*` tools additionally share the `maintenance` flag with `cluster_watchdog.py` via `cluster_config.get_cluster_mode()` / `set_cluster_mode()` — single source of truth, so the watchdog stands down during an OS shutdown and never fights it.
 
@@ -662,12 +667,14 @@ All tools read changeable values from `cfg.*` (43 references verified). No hardc
 
 | Key | Kind | Fits PC | Notes |
 |-----|------|---------|-------
+| `qwythos-9b-q8_0` | dense (MTP) | No | **LIVE model** — `Qwythos-9B-Claude-Mythos-5-1M-MTP-Q8_0.gguf`, qwen35 arch + MTP draft heads, ~9.5GB, sharded across all 11 nodes (~6.0 tok/s) |
 | `llama-3.3-70b-iq3_xs` | dense | No | 70B dense, RPC layer-piping across 11 nodes |
 | `qwen2.5-72b-iq3_m` | dense | No | 72B dense coding/JSON/multilingual, RPC layer-piping |
 | `codestral-22b-q8_0` | dense | **Yes** | 22B code specialist, Q8_0 ~23.6GB fits PC directly |
 | `deepseek-coder-v2-lite-q4_k_m` | moe | **Yes** | 16B total / 2.4B active MoE; Tier 2 ring target (64 experts ~6/node) |
+| `deepseek-r1-distill-qwen-32b-q6_k_l` | dense | No | 32B reasoning model, pushed to node0 SSD |
 
-Each entry has `local` (PC path), `hf_url` (HF resolve URL), `kind`, `fits_pc`, `notes`. `model_download` drives a resumable range-segmented fetch via `code/dl_generic_model.py` (auth from `HF_TOKEN` env or `C:\Models\.hf_token`). **Codestral-22B is the "one more model" downloaded to the PC** (fits directly, no sharding needed).
+Each entry has `local` (PC path), `hf_url` (HF resolve URL), `kind`, `fits_pc`, `notes`. `model_download` drives a resumable range-segmented fetch via `code/dl_generic_model.py` (auth from `HF_TOKEN` env or `C:\Models\.hf_token`). **Codestral-22B is the "one more model" downloaded to the PC** (fits directly, no sharding needed). The MTP models (`qwythos-9b-q8_0`, and the dense 70B/72B entries which use `qwen2`/`qwen35` arch) require the MTP build end-to-end — coordinator (`C:\llama.cpp-mtp`) and workers (`ggml-rpc-server`) must both be the MTP tree.
 
 ### B.7 PyCUDA install on node0 (golden-image dependency)
 
@@ -698,15 +705,19 @@ The `mcp` package is installed under the `py -3.14` launcher (NOT bare `python`)
 
 ---
 
-## Appendix A — Build Recipe (b56f079e2)
+## Appendix A — Build Recipe (b56f079e2, RETIRED reference)
 
-> This appendix is the authoritative, self-contained build record. It is verified
-> working: the PC `llama-cli.exe` (CPU-only RPC client) connects to node0's
-> `rpc-server` (CUDA 10.2 backend) and generates coherent text; if the server is not
-> running, the client fails with `Failed to connect to 192.168.50.150:50052` (the
-> compute is offloaded to the Jetson's Maxwell GPU — there is no local fallback).
+> **Status: RETIRED reference build.** The live fleet runs the **MTP build** (`b9886`/`20a04b2`,
+> binary `ggml-rpc-server`, CUDA 10.2 + C++14 port) documented in **`MTP CUDA Enablement Work Plan.md`** —
+> that is now the authoritative build record for the running cluster. This appendix is kept as a
+> **fallback reference** for the non-MTP `rpc-server` path (it is technically valid and was the
+> build that ran before the MTP deployment). The MTP build supersedes it for any model that needs
+> the `qwen35` architecture or MTP draft heads (i.e. Qwythos-9B and the rest of the live registry).
 >
-> **This is the single source of truth for the build. Do NOT rely on any other doc.**
+> The recipe below is verified working: the PC `llama-cli.exe` (CPU-only RPC client) connects to
+> node0's `rpc-server` (CUDA 10.2 backend) and generates coherent text; if the server is not
+> running, the client fails with `Failed to connect to 192.168.50.150:50052` (the compute is
+> offloaded to the Jetson's Maxwell GPU — there is no local fallback).
 
 ### A.0 Why this specific commit
 
@@ -828,7 +839,9 @@ Starting RPC server on 0.0.0.0:50052, backend memory: 3000 MB
 
 > **`pkill` self-match warning:** never run `pkill -f rpc-server` over SSH — the SSH command line contains the string `rpc-server`, so pkill kills its own parent shell. Use a split pattern like `'rpc-serv''er'` (or `[r]pc-server`) to avoid the match.
 
-### A.5 PC orchestrator build (CPU-only RPC client)
+### A.5 PC orchestrator build (CPU-only RPC client — RETIRED reference)
+
+> **Live PC build is in Phase 1** (`C:\llama.cpp-mtp`, commit `20a04b2`, MTP build producing `llama-cli.exe` + `llama-server.exe`). The steps below describe the retired `b56f079e2` reference client and are kept only as a fallback record.
 
 - Built from the **same commit `b56f079e2`** (RPC protocol parity; keeps the RTX 5060 free for other work during batch submits).
 - `GGML_CUDA=OFF`, `GGML_RPC=ON`, MSVC 19.44 (`VsDevCmd.bat -vcvars_ver=14.44`), Ninja generator.
