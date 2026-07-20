@@ -1,0 +1,236 @@
+# Jetson Nano CUDA + RPC Build Recipe
+# Commit: 667d72846 (rpc : early register backend devices)
+# Goal: CUDA (sm_53 Maxwell GPU) + RPC compiled with NVCC 10.2 / GCC 10/8
+# Status: 5 NVCC 10.2 patches applied - may need more when make runs
+
+=================================================================
+STEP 1: Install Required Packages (on Jetson Nano)
+=================================================================
+
+sudo apt update && sudo apt install -y \
+  gcc-10 g++-10 \
+  gcc-8 g++-8 \
+  cmake \
+  build-essential \
+  libcurl4-openssl-dev \
+  git
+
+=================================================================
+STEP 2: Fix System Compiler Symlinks
+=================================================================
+
+sudo update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-10 100
+sudo update-alternatives --install /usr/bin/g++ g++ /usr/bin/g++-10 100
+sudo ln -sf /usr/bin/gcc-10 /usr/bin/gcc
+sudo ln -sf /usr/bin/g++-10 /usr/bin/g++
+
+=================================================================
+STEP 3: Verify Compiler Versions
+=================================================================
+
+gcc --version     # Must show: gcc (Ubuntu 10.5.0-...) 10.5.0
+gcc-8 --version   # Must show: gcc (Ubuntu 8.4.0-...) 8.4.0
+
+=================================================================
+STEP 4: Checkout the Correct Commit
+=================================================================
+
+cd ~/llama.cpp
+git stash
+git checkout 667d72846
+
+=================================================================
+STEP 5: Apply ALL NVCC 10.2 Compatibility Patches
+=================================================================
+
+cd ~/llama.cpp
+
+# Patch 1: Stub cuda_bf16.h (CUDA 10.2 doesn't have it)
+cat > ggml/src/ggml-cuda/vendors/cuda_bf16.h << 'BF16EOF'
+#pragma once
+struct __nv_bfloat16 { unsigned short __x; __host__ __device__ __nv_bfloat16() : __x(0) {} __host__ __device__ __nv_bfloat16(float f) : __x(0) { (void)f; } __host__ __device__ operator float() const { return 0.0f; } };
+typedef __nv_bfloat16 nv_bfloat16;
+BF16EOF
+
+# Patch 2: Use quotes for local stub header (NVCC finds it in vendors/)
+sed -i 's|#include <cuda_bf16.h>|#include "cuda_bf16.h"|' ggml/src/ggml-cuda/vendors/cuda.h
+
+# Patch 3: NVCC 10.2 doesn't allow constexpr __device__
+sed -i 's/constexpr __device__/__device__ const/g' ggml/src/ggml-cuda/common.cuh
+
+# Patch 4: NVCC 10.2 doesn't have __builtin_assume
+sed -i '1s/^/#ifndef __builtin_assume\n#define __builtin_assume(x) ((void)0)\n#endif\n/' ggml/src/ggml-cuda/fattn-common.cuh
+
+# Patch 5: Fix unique_ptr copy errors (GCC 10 strictness)
+sed -i 's/queue\.push(msg)/queue.push(std::move(msg))/g' ggml/src/ggml-rpc/ggml-rpc.cpp
+sed -i 's/queue\.push(ev->msg)/queue.push(std::move(ev->msg))/g' ggml/src/ggml-rpc/ggml-rpc.cpp
+
+=================================================================
+STEP 6: Build
+=================================================================
+
+cd ~/llama.cpp
+rm -rf build && mkdir build && cd build
+
+CC=/usr/bin/gcc-10 CXX=/usr/bin/g++-10 cmake .. \
+  -DBUILD_SHARED_LIBS=OFF \
+  -DGGML_CUDA=ON \
+  -DGGML_RPC=ON \
+  -DCMAKE_BUILD_TYPE=Release \
+  -DCMAKE_CUDA_ARCHITECTURES=53 \
+  -DCMAKE_CUDA_HOST_COMPILER=/usr/bin/gcc-8 \
+  -DCMAKE_CUDA_STANDARD=14 \
+  -DCMAKE_C_FLAGS="-march=armv8-a -mno-outline-atomics" \
+  -DCMAKE_CXX_FLAGS="-march=armv8-a -mno-outline-atomics"
+
+make -j4
+
+=================================================================
+IF MORE ERRORS APPEAR:
+=================================================================
+Run:  make -j4 2>&1 | grep "error:" | head -5
+Share the output - each fix is one small patch away.
+
+=================================================================
+PATCHES APPLIED SO FAR (SUMMARY):
+=================================================================
+#1 CUDA17 required     -> Added -DCMAKE_CUDA_STANDARD=14
+#2 cuda_bf16.h missing -> Created stub + changed <> to ""
+#3 constexpr __device__ -> Changed to __device__ const
+#4 nv_bfloat16 missing -> Added struct stub to cuda_bf16.h
+#5 __builtin_assume     -> Added compat macro #define
+#6 constexpr if warning -> Harmless, ignored
+
+=================================================================
+EXPECTED OUTPUT ON SUCCESS:
+=================================================================
+build/bin/ggml-rpc-server    -> RPC daemon (port 50052)
+build/bin/server             -> HTTP inference server
+All CUDA kernels compiled for sm_53 (Maxwell GPU)
+
+
+
+cd ~/llama.cpp
+
+# First, stub out cuda_bf16.h for CUDA 10.2 (no bf16 support)
+cat > ggml/src/ggml-cuda/vendors/cuda_bf16.h << 'EOF'
+#pragma once
+// Stub for CUDA 10.2 which lacks cuda_bf16.h
+// bf16 types are not available - will use fallback paths
+EOF
+
+# Now build
+rm -rf build && mkdir build && cd build
+
+CC=/usr/bin/gcc-10 CXX=/usr/bin/g++-10 cmake .. \
+  -DBUILD_SHARED_LIBS=OFF \
+  -DGGML_CUDA=ON \
+  -DGGML_RPC=ON \
+  -DCMAKE_BUILD_TYPE=Release \
+  -DCMAKE_CUDA_ARCHITECTURES=53 \
+  -DCMAKE_CUDA_HOST_COMPILER=/usr/bin/gcc-8 \
+  -DCMAKE_CUDA_STANDARD=14 \
+  -DCMAKE_C_FLAGS="-march=armv8-a -mno-outline-atomics" \
+  -DCMAKE_CXX_FLAGS="-march=armv8-a -mno-outline-atomics" \
+  2>&1 | tail -15
+
+  This was the holyshit moment!
+
+  And the below compiled:
+
+  # All patches in one block — run these before cmake/make
+cd ~/llama.cpp
+
+cat > ggml/src/ggml-cuda/vendors/cuda_bf16.h << 'BF16EOF'
+#pragma once
+struct __nv_bfloat16 { unsigned short __x; __host__ __device__ __nv_bfloat16() : __x(0) {} __host__ __device__ __nv_bfloat16(float f) : __x(0) { (void)f; } __host__ __device__ operator float() const { return 0.0f; } };
+typedef __nv_bfloat16 nv_bfloat16;
+BF16EOF
+
+sed -i 's|#include <cuda_bf16.h>|#include "cuda_bf16.h"|' ggml/src/ggml-cuda/vendors/cuda.h
+sed -i 's/constexpr __device__/__device__ const/g' ggml/src/ggml-cuda/common.cuh
+sed -i '1s/^/#ifndef __builtin_assume\n#define __builtin_assume(x) ((void)0)\n#endif\n/' ggml/src/ggml-cuda/fattn-common.cuh
+sed -i 's/queue\.push(msg)/queue.push(std::move(msg))/g' ggml/src/ggml-rpc/ggml-rpc.cpp
+sed -i 's/queue\.push(ev->msg)/queue.push(std::move(ev->msg))/g' ggml/src/ggml-rpc/ggml-rpc.cpp
+
+# Then rebuild
+rm -rf build && mkdir build && cd build
+CC=/usr/bin/gcc-10 CXX=/usr/bin/g++-10 cmake .. \
+  -DBUILD_SHARED_LIBS=OFF -DGGML_CUDA=ON -DGGML_RPC=ON \
+  -DCMAKE_BUILD_TYPE=Release -DCMAKE_CUDA_ARCHITECTURES=53 \
+  -DCMAKE_CUDA_HOST_COMPILER=/usr/bin/gcc-8 \
+  -DCMAKE_CUDA_STANDARD=14 \
+  -DCMAKE_C_FLAGS="-march=armv8-a -mno-outline-atomics" \
+  -DCMAKE_CXX_FLAGS="-march=armv8-a -mno-outline-atomics"
+make -j4
+
+
+Step 1: Install the Required PackagesYour build mixes GCC 10, GCC 8, and the CUDA 10.2 toolkit. Run this command to install the required compilers and library headers onto your Jetson Nano:bashsudo apt update && sudo apt install -y \
+  gcc-10 g++-10 \
+  gcc-8 g++-8 \
+  cmake \
+  build-essential \
+  libcurl4-openssl-dev \
+  git
+Use code with caution.Step 2: Fix the System Compiler SymlinksFor your configuration to parse everything cleanly, your terminal must route generic compile requests to version 10, while allowing the inner scripts to route CUDA tasks to version 8.Run these commands to explicitly map the system-wide shortcuts to version 10:bashsudo update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-10 100
+sudo update-alternatives --install /usr/bin/g++ g++ /usr/bin/g++-10 100
+
+sudo ln -sf /usr/bin/gcc-10 /usr/bin/gcc
+sudo ln -sf /usr/bin/g++-10 /usr/bin/g++
+Use code with caution.Step 3: Verify Your Active VersionsRun these two quick verification checks. Your terminal must return exactly these versions before running CMake:Check your global compiler:bashgcc --version
+Use code with caution.(Must show: gcc (Ubuntu 10.5.0-...) 10.5.0)Check your backend host compiler:bashgcc-8 --version
+Use code with caution.(Must show: gcc (Ubuntu 8.4.0-...) 8.4.0)Step 4: Run Your Exact Successful Build BlockNow that the underlying tools are fully mapped, navigate to your workspace, clear out any broken directory structures from your previous attempts, and run your exact build sequence:bashcd ~/llama.cpp
+rm -rf build && mkdir build && cd build
+
+CC=/usr/bin/gcc-10 CXX=/usr/bin/g++-10 cmake .. \
+  -DBUILD_SHARED_LIBS=OFF \
+  -DLLAMA_CUDA=ON \
+  -DLLAMA_RPC=ON \
+  -DCMAKE_BUILD_TYPE=Release \
+  -DCMAKE_CUDA_ARCHITECTURES=53 \
+  -DCMAKE_CUDA_HOST_COMPILER=/usr/bin/gcc-8 \
+  -DCMAKE_C_FLAGS="-march=armv8-a -mno-outline-atomics" \
+  -DCMAKE_CXX_FLAGS="-march=armv8-a -mno-outline-atomics"
+
+make -j4
+
+
+Perfect. You've captured the **exact working version manifest** from the booted (but corrupted) SD card. Here's the definitive version lock:
+
+---
+
+### ✅ **Verified Working Version Manifest** (from booted SD card)
+
+| Component | Version | Source |
+|-----------|---------|--------|
+| **OS** | Ubuntu 20.04.6 LTS (Focal Fossa) | `/etc/os-release` |
+| **Kernel** | 4.9.253-tegra | `uname -a` |
+| **GCC (host)** | 10.5.0 (Ubuntu 10.5.0-1ubuntu1~20.04) | `gcc --version` |
+| **GCC-8 (CUDA host)** | 8.4.0 (Ubuntu/Linaro 8.4.0-3ubuntu2) | `gcc-8 --version` |
+| **GCC-10** | 10.5.0 | `gcc-10 --version` |
+| **NVCC** | 10.2.300 (cuda_10.2_r440) | `nvcc --version` |
+| **CUDA** | 10.2.300 | `/usr/local/cuda/version.txt` |
+| **CMake** | 4.3.4 | `cmake --version` |
+| **Make** | 4.2.1 | `make --version` |
+| **CUDA Libraries** | cuBLAS 10.2.3.300, cuDNN 8.2.1.32, TensorRT 8.0.1.6 | `dpkg -l` |
+| **Python** | 3.8.10 | `python3 --version` |
+| **llama.cpp commit** | `667d72846` (tag: b4501) | `git log -1 --oneline` |
+| **Kernel** | 4.9.253-tegra | `uname -a` |
+| **NVCC** | 10.2.300 | `nvcc --version` |
+| **CUDA** | 10.2.300 | `/usr/local/cuda/version.txt` |
+| **Systemd services** | llama-rpc.service ✅, nfs-kernel-server ✅, rpcbind ✅ | `systemctl list-unit-files` |
+| **Kernel modules** | nvgpu | `lsmod` |
+| **llama.cpp commit** | `667d72846` (tag: b4501) | `git log -1 --oneline` |
+
+---
+
+### **This is the exact working combination.** 
+
+The work plan Phase 5 already documents:
+- ✅ Commit `667d72846`
+- ✅ GCC 10/8 mixed compilation
+- ✅ NVCC 10.2 with CUDA 14
+- ✅ 5 NVCC 10.2 patches
+- ✅ CMake flags (`LLAMA_*` vs `GGML_*` noted in alternatives)
+
+**The SD card is now documented and can be discarded.** Proceed with fresh SD card → Phases 4→8 on clean hardware.

@@ -1,0 +1,4 @@
+=== Fix remaining vtable function signatures ===
+graph_optimize pattern not found
+Checking stable tree vtable structure...
+Done

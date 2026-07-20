@@ -1,0 +1,99 @@
+Warning: Permanently added '192.168.50.150' (ED25519) to the list of known hosts.
+===== PHASE 8c STABILITY SCAN : nano  2026-07-10T16:15:09Z =====
+
+--- [A] THERMAL ---
+  /sys/devices/virtual/thermal/thermal_zone0/temp = 44 C
+  /sys/devices/virtual/thermal/thermal_zone1/temp = 38 C
+  /sys/devices/virtual/thermal/thermal_zone2/temp = 35 C
+  /sys/devices/virtual/thermal/thermal_zone3/temp = 34 C
+  /sys/devices/virtual/thermal/thermal_zone4/temp = 50 C
+  /sys/devices/virtual/thermal/thermal_zone5/temp = 36 C
+  thermal throttle events (cpu0):
+  nvpmodel: NVPM WARN: fan mode is not set!
+NV Power Mode: MAXN
+0
+
+--- [B] KERNEL / DMESG ERRORS (last 30) ---
+[vr jul 10 13:38:08 2026] EXT4-fs (mmcblk0p1): 1 orphan inode deleted
+[vr jul 10 13:38:08 2026] EXT4-fs (mmcblk0p1): recovery complete
+[vr jul 10 13:38:08 2026] EXT4-fs (mmcblk0p1): mounted filesystem with ordered data mode. Opts: (null)
+[vr jul 10 13:38:08 2026] Rootfs mounted over mmcblk0p1
+[vr jul 10 13:38:09 2026] systemd[1]: (This warning is only shown for the first unit using IP firewalling.)
+[vr jul 10 13:38:09 2026] systemd[1]: Created slice system-systemd\x2dfsck.slice.
+[vr jul 10 13:38:09 2026] systemd[1]: Listening on fsck to fsckd communication Socket.
+[vr jul 10 13:38:09 2026] EXT4-fs (mmcblk0p1): re-mounted. Opts: (null)
+[vr jul 10 13:38:10 2026] squashfs: SQUASHFS error: Xattrs in filesystem, these will be ignored
+[vr jul 10 13:38:10 2026] squashfs: SQUASHFS error: unable to read xattr id index table
+[vr jul 10 13:38:10 2026] squashfs: SQUASHFS error: Xattrs in filesystem, these will be ignored
+[vr jul 10 13:38:10 2026] squashfs: SQUASHFS error: unable to read xattr id index table
+[vr jul 10 13:38:10 2026] squashfs: SQUASHFS error: Xattrs in filesystem, these will be ignored
+[vr jul 10 13:38:10 2026] squashfs: SQUASHFS error: unable to read xattr id index table
+[vr jul 10 13:38:10 2026] squashfs: SQUASHFS error: Xattrs in filesystem, these will be ignored
+[vr jul 10 13:38:10 2026] squashfs: SQUASHFS error: unable to read xattr id index table
+[vr jul 10 13:38:11 2026] WARNING: CPU: 1 PID: 4065 at /dvs/git/dirty/git-master_linux/kernel/kernel-4.9/drivers/spi/spidev.c:767 0xffffff80011752a8
+[vr jul 10 13:38:11 2026] WARNING: CPU: 1 PID: 4065 at /dvs/git/dirty/git-master_linux/kernel/kernel-4.9/drivers/spi/spidev.c:767 0xffffff80011752a8
+[vr jul 10 13:38:11 2026] WARNING: CPU: 1 PID: 4065 at /dvs/git/dirty/git-master_linux/kernel/kernel-4.9/drivers/spi/spidev.c:767 0xffffff80011752a8
+[vr jul 10 13:38:11 2026] WARNING: CPU: 1 PID: 4065 at /dvs/git/dirty/git-master_linux/kernel/kernel-4.9/drivers/spi/spidev.c:767 0xffffff80011752a8
+[vr jul 10 13:38:11 2026] random: 7 urandom warning(s) missed due to ratelimiting
+[vr jul 10 13:38:37 2026] vddio-sdmmc3-ap: disabling
+[vr jul 10 13:42:49 2026] EXT4-fs (sda1): recovery complete
+[vr jul 10 13:42:49 2026] EXT4-fs (sda1): mounted filesystem with ordered data mode. Opts: (null)
+[vr jul 10 13:43:09 2026] EXT4-fs (sdb1): recovery complete
+[vr jul 10 13:43:09 2026] EXT4-fs (sdb1): mounted filesystem with ordered data mode. Opts: (null)
+[vr jul 10 13:44:58 2026] squashfs: SQUASHFS error: Filesystem uses "lzo" compression. This is not supported
+[vr jul 10 13:45:02 2026] squashfs: SQUASHFS error: Filesystem uses "lzo" compression. This is not supported
+[vr jul 10 13:48:58 2026] EXT4-fs error (device sda1): ext4_find_entry:1455: inode #2: comm ls: reading directory lblock 0
+[vr jul 10 13:49:45 2026] EXT4-fs (sdb1): mounted filesystem with ordered data mode. Opts: (null)
+
+--- [C] SYSTEMD FAILED UNITS ---
+snap-gnome\x2d3\x2d38\x2d2004-145.mount not-found failed failed snap-gnome\x2d3\x2d38\x2d2004-145.mount
+snap-gtk\x2dcommon\x2dthemes-1535.mount not-found failed failed snap-gtk\x2dcommon\x2dthemes-1535.mount
+
+--- [D] rpc-server PROCESS HEALTH ---
+  45264       1 Ss      01:37:23  0.0  0.2 /home/jetson/llama.cpp/build/bin/rpc-server -H 0.0.0.0 -p 50052 -m 3600
+  jetson-maxperf restarts: NRestarts=0
+
+--- [E] MEMORY PRESSURE / OOM ---
+              total        used        free      shared  buff/cache   available
+Mem:           3959        1229         839          34        1890        2540
+Swap:          1979           0        1979
+  OOM/kill in journal:
+
+--- [F] SD / STORAGE HEALTH ---
+  mmc/sdcard errors:
+/dev/mmcblk0p1   58G   23G   33G  41% /
+/dev/mmcblk0p1 3801088 252777 3548311    7% /
+
+--- [G] ZOMBIE / ORPHAN PROCESSES ---
+  top CPU consumers:
+    PID %CPU %MEM COMMAND
+   5190  3.0  0.2 polkitd
+  92146  3.0  0.1 systemd-udevd
+  92244  3.0  0.1 sshd
+  45673  2.8  0.8 tracker-store
+  92093  2.0  0.1 systemd-udevd
+
+--- [H] JOURNAL ERRORS SINCE BOOT (last 20) ---
+-- Logs begin at Mon 2024-06-17 22:29:39 CEST, end at Fri 2026-07-10 18:15:09 CEST. --
+jul 10 13:43:01 nano systemd[1]: Failed unmounting /mnt/ssd.
+jul 10 13:43:01 nano systemd[1]: Failed unmounting /mnt/ssd.
+jul 10 13:43:01 nano systemd[1]: Failed unmounting /mnt/ssd.
+jul 10 13:43:01 nano systemd[1]: Failed unmounting /mnt/ssd.
+jul 10 13:43:01 nano systemd[1]: Failed unmounting /mnt/ssd.
+jul 10 13:43:01 nano systemd[1]: Failed unmounting /mnt/ssd.
+jul 10 13:43:01 nano systemd[1]: Failed unmounting /mnt/ssd.
+jul 10 13:43:01 nano systemd[1]: Failed unmounting /mnt/ssd.
+jul 10 13:43:01 nano systemd[1]: Failed unmounting /mnt/ssd.
+jul 10 13:43:01 nano systemd[1]: Failed unmounting /mnt/ssd.
+jul 10 13:43:01 nano systemd[1]: Failed unmounting /mnt/ssd.
+jul 10 13:43:01 nano systemd[1]: Failed unmounting /mnt/ssd.
+jul 10 13:43:01 nano systemd[1]: Failed unmounting /mnt/ssd.
+jul 10 13:43:08 nano kernel: sd 1:0:0:0: [sdb] No Caching mode page found
+jul 10 13:43:08 nano kernel: sd 1:0:0:0: [sdb] Assuming drive cache: write through
+jul 10 13:44:58 nano kernel: squashfs: SQUASHFS error: Filesystem uses "lzo" compression. This is not supported
+jul 10 13:44:58 nano systemd[1]: Failed to mount Mount unit for gnome-3-38-2004, revision 145.
+jul 10 13:45:02 nano kernel: squashfs: SQUASHFS error: Filesystem uses "lzo" compression. This is not supported
+jul 10 13:45:02 nano systemd[1]: Failed to mount Mount unit for gtk-common-themes, revision 1535.
+jul 10 13:48:57 nano kernel: EXT4-fs error (device sda1): ext4_find_entry:1455: inode #2: comm ls: reading directory lblock 0
+
+===== SCAN COMPLETE =====

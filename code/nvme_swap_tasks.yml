@@ -1,0 +1,45 @@
+# NVMe Swap File (Emergency Memory Buffer) - Ansible Tasks
+# From: Nano Work Plan.md — NVMe Swap File (Emergency Memory Buffer)
+# Append to cluster_deploy.yml
+
+- name: Check if emergency swap file already exists
+  stat:
+    path: /mnt/ssd/emergency_swap.img
+  register: swap_file_check
+
+- name: Allocate a 4GB swap space on NVMe storage block
+  command: dd if=/dev/zero of=/mnt/ssd/emergency_swap.img bs=1M count=4096
+  when: not swap_file_check.stat.exists
+
+- name: Set restrictive file permissions on swap space
+  file:
+    path: /mnt/ssd/emergency_swap.img
+    owner: root
+    group: root
+    mode: '0600'
+
+- name: Format the allocated space as Linux swap filesystem
+  command: mkswap /mnt/ssd/emergency_swap.img
+  when: not swap_file_check.stat.exists
+
+- name: Bind and register swap path permanently in fstab configuration
+  mount:
+    name: none
+    src: /mnt/ssd/emergency_swap.img
+    fstype: swap
+    opts: sw
+    passno: 0
+    dump: 0
+    state: present
+
+- name: Explicitly activate the newly configured swap file
+  command: swapon -a
+
+- name: Configure Swappiness to only fire when RAM is at 95 percent capacity
+  sysctl:
+    name: vm.swappiness
+    value: '5'
+    state: present
+    reload: yes
+
+# Note: Ensure /mnt/ssd/ matches the mount point of your high-speed storage on your Jetson operating environment.

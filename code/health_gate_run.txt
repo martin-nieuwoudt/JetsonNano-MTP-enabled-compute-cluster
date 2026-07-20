@@ -1,0 +1,32 @@
+Warning: Permanently added '192.168.50.150' (ED25519) to the list of known hosts.
+==============================================================
+ PHASE 8b ΓÇö GOLDEN IMAGE HEALTH GATE
+ Host: nano  IP: 192.168.50.150
+ Date: 2026-07-10T16:09:29Z
+==============================================================
+[1/8] Power/clock profile
+  [PASS] nvpmodel mode = MAXN (max performance)
+  [PASS] jetson_clocks / maxperf service active
+[2/8] SD card / storage health
+  [PASS] no mmc I/O errors in dmesg
+  [PASS] root filesystem 41% used (healthy headroom)
+  [PASS] root device mounted read-write
+[3/8] rpc-server binary integrity
+  [PASS] binary present and executable: /home/jetson/llama.cpp/build/bin/rpc-server
+  [PASS] rpc-server --help returns 0 (binary not corrupted)
+[4/8] Required services enabled
+  [PASS] service enabled: jetson-maxperf.service
+  [PASS] service enabled: cluster-init.service
+  [PASS] service enabled: phase3b_firstboot.service
+[5/8] Memory fragmentation (contiguous blocks)
+  [PASS] buddyinfo: 1961 contiguous block(s) order>=5 available
+[6/8] RPC port 50052
+  [PASS] rpc-server running and port 50052 listening
+[7/8] Thermal baseline (idle)
+  [PASS] idle thermal = 33.5C (below 80C warn threshold)
+[8/8] Load probe (optional)
+  [WARN] skipped (pass --load-probe to actually launch + connect rpc-server)
+==============================================================
+ RESULT: 0 FAIL(s), 1 WARN(s)
+ VERDICT: HEALTHY ΓÇö safe to proceed to Phase 9 clone.
+==============================================================

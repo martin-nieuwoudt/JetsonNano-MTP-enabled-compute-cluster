@@ -1,0 +1,28 @@
+Step 1: Install the Required PackagesYour build mixes GCC 10, GCC 8, and the CUDA 10.2 toolkit. Run this command to install the required compilers and library headers onto your Jetson Nano:bashsudo apt update && sudo apt install -y \
+  gcc-10 g++-10 \
+  gcc-8 g++-8 \
+  cmake \
+  build-essential \
+  libcurl4-openssl-dev \
+  git
+Use code with caution.Step 2: Fix the System Compiler SymlinksFor your configuration to parse everything cleanly, your terminal must route generic compile requests to version 10, while allowing the inner scripts to route CUDA tasks to version 8.Run these commands to explicitly map the system-wide shortcuts to version 10:bashsudo update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-10 100
+sudo update-alternatives --install /usr/bin/g++ g++ /usr/bin/g++-10 100
+
+sudo ln -sf /usr/bin/gcc-10 /usr/bin/gcc
+sudo ln -sf /usr/bin/g++-10 /usr/bin/g++
+Use code with caution.Step 3: Verify Your Active VersionsRun these two quick verification checks. Your terminal must return exactly these versions before running CMake:Check your global compiler:bashgcc --version
+Use code with caution.(Must show: gcc (Ubuntu 10.5.0-...) 10.5.0)Check your backend host compiler:bashgcc-8 --version
+Use code with caution.(Must show: gcc (Ubuntu 8.4.0-...) 8.4.0)Step 4: Run Your Exact Successful Build BlockNow that the underlying tools are fully mapped, navigate to your workspace, clear out any broken directory structures from your previous attempts, and run your exact build sequence:bashcd ~/llama.cpp
+rm -rf build && mkdir build && cd build
+
+CC=/usr/bin/gcc-10 CXX=/usr/bin/g++-10 cmake .. \
+  -DBUILD_SHARED_LIBS=OFF \
+  -DLLAMA_CUDA=ON \
+  -DLLAMA_RPC=ON \
+  -DCMAKE_BUILD_TYPE=Release \
+  -DCMAKE_CUDA_ARCHITECTURES=53 \
+  -DCMAKE_CUDA_HOST_COMPILER=/usr/bin/gcc-8 \
+  -DCMAKE_C_FLAGS="-march=armv8-a -mno-outline-atomics" \
+  -DCMAKE_CXX_FLAGS="-march=armv8-a -mno-outline-atomics"
+
+make -j4

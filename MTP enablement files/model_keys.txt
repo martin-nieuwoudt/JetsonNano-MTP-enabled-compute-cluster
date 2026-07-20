@@ -1,0 +1,8 @@
+general.architecture = qwen35
+general.type = model
+general.name = Qwythos 9B Claude Mythos 5 1M MTP
+general.size_label = 9.2B
+tokenizer.ggml.model = gpt2
+tokenizer.ggml.pre = qwen35
+general.quantization_version = 2
+general.file_type = 7

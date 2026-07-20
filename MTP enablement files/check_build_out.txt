@@ -1,0 +1,42 @@
+=== build_mtp.sh ===
+set -e
+cd /home/jetson/llama.cpp-mtp
+echo "BUILD START $(date)"
+rm -rf build
+/home/jetson/.local/bin/cmake -B build \
+  -DGGML_CUDA=ON \
+  -DGGML_RPC=ON \
+  -DGGML_NATIVE=OFF \
+  -DGGML_CPU_ARM_ARCH=armv8.1-a+nolse \
+  -DCMAKE_CUDA_ARCHITECTURES=53 \
+  -DCMAKE_BUILD_TYPE=Release \
+  -DCMAKE_CUDA_COMPILER=/usr/local/cuda-10.2/bin/nvcc \
+  -DCMAKE_CUDA_FLAGS='--compiler-bindir /usr/bin/gcc-8' \
+  -DCMAKE_C_COMPILER=gcc-9 \
+  -DCMAKE_CXX_COMPILER=g++-9 \
+  -DCMAKE_CUDA_STANDARD=14 \
+  -DGGML_CUDA_FA=OFF \
+  -DGGML_CUDA_GRAPHS=OFF \
+  -DGGML_RPC_RDMA=OFF \
+  -DGGML_CUDA_NCCL=OFF 2>&1 | tail -20
+echo "=== CONFIGURE DONE, building ggml-rpc-server ==="
+cd build && make -j4 ggml-rpc-server 2>&1 | tail -80
+echo "BUILD END $(date)  EXIT=${PIPESTATUS[0]}"
+ls -la bin/ggml-rpc-server 2>&1
+=== launch_build.sh ===
+cd /home/jetson/llama.cpp-mtp
+setsid bash -c 'bash /home/jetson/build_mtp.sh > /home/jetson/mtp_build.log 2>&1' < /dev/null &
+disown
+echo "LAUNCHED pid=$!"
+sleep 3
+echo "=== immediate log check ==="
+cat /home/jetson/mtp_build.log 2>&1 | head -20
+echo "=== proc check ==="
+pgrep -f build_mtp.sh >/dev/null && echo RUNNING || echo STOPPED
+=== gcc/g++ versions ===
+gcc-9 (Ubuntu 9.4.0-1ubuntu1~20.04.2) 9.4.0
+g++-9 (Ubuntu 9.4.0-1ubuntu1~20.04.2) 9.4.0
+gcc-8 (Ubuntu/Linaro 8.4.0-3ubuntu2) 8.4.0
+=== nvcc ===
+Cuda compilation tools, release 10.2, V10.2.300
+Build cuda_10.2_r440.TC440_70.29663091_0

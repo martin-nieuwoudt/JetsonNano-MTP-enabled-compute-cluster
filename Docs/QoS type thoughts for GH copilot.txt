@@ -1,0 +1,28 @@
+
+https://github.com/ajeetraina/jetsonMCP
+
+https://github.com/modelcontextprotocol/servers 
+
+https://github.com/punkpeye/awesome-mcp-servers
+
+
+https://mcpservers.org/
+
+NVIDIA has heavily integrated the Model Context Protocol (MCP) across its developer ecosystem, enabling AI agents and LLMs to seamlessly access complex NVIDIA domain tools. You can build, deploy, or connect to these MCP capabilities using primary developer resources:
+NVIDIA NeMo Agent Toolkit: Functions as both an MCP client and server, allowing you to connect remote tools or publish customized agent functions.
+NVIDIA AIQ Blueprint: Uses MCP as a standardized framework to discover and connect external data sources or agent apps to your workflows.
+NVIDIA RAG MCP Server: Acts as an adapter to instantly connect your RAG and ingestion systems to MCP-aware clients like IDEs and agent orchestration frameworks.
+NVIDIA RTX Remix MCP: Automatically initiates an MCP server via Server-Sent Events (SSE) so that AI agents can learn about and interact with your Remix environment. [7]
+Experiences with NVIDIA MCP Integrations
+
+Developers and community members highlight the massive productivity boosts they get when connecting LLM agents to heavy NVIDIA APIs and domain tools.
+
+Could you tell me which specific NVIDIA domain you are trying to automate (e.g., NeMo AI agents, RTX Remix, or Video Analytics)? I can help you find the exact SDKs and repositories to get started.
+AI responses may include mistakes.
+[1] https://docs.nvidia.com/nemo/agent-toolkit/1.3/workflows/mcp/index.html
+[2] https://docs.nvidia.com/vss/3.0.0/vssnext-docs/3.0.0/video-analytics-mcp.html
+[3] https://www.youtube.com/watch?v=yYv8lBIyqn0
+[4] https://docs.nvidia.com/nemo/datadesigner/concepts/tool-use-mcp/overview
+[5] https://docs.nvidia.com/aiq-blueprint/latest/customization/mcp-tools.html
+[6] https://docs.nvidia.com/rag/2.4.0/mcp.html
+[7] https://docs.omniverse.nvidia.com/kit/docs/rtx_remix/1.2.4/docs/howto/learning-mcp.html

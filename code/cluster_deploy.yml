@@ -1,0 +1,232 @@
+---
+# Ansible Cluster Deployment Playbook
+# From: Nano Work Plan.md — Ansible Cluster Deployment
+# Save as: cluster_deploy.yml in WSL2
+
+- name: Configure Jetson Nano llama.cpp Cluster Nodes
+  hosts: jetsons
+  become: yes
+  gather_facts: yes
+
+  tasks:
+  - name: Ensure passwordless sudo is active (safety net)
+    copy:
+      dest: /etc/sudoers.d/jetson-nopasswd
+      mode: '0440'
+      content: |
+        jetson ALL=(ALL) NOPASSWD:ALL
+
+  - name: Update and upgrade apt packages
+    apt:
+      update_cache: yes
+      upgrade: dist
+      cache_valid_time: 3600
+
+  - name: Install prerequisite compiler chains and libraries
+    apt:
+      name:
+      - build-essential
+      - cmake
+      - git
+      - pkg-config
+      - libopenblas-dev
+      - liblapack-dev
+      - haveged
+      - nfs-common
+      state: present
+
+  - name: Ensure NFS mount point exists
+    file:
+      path: /mnt/nano-ssd
+      state: directory
+      owner: jetson
+      group: jetson
+      mode: '0755'
+
+  - name: Add NFS mount to fstab (Nano Zero model share)
+    mount:
+      path: /mnt/nano-ssd
+      src: 192.168.50.150:/mnt/ssd/models
+      fstype: nfs
+      opts: defaults,noatime
+      state: present
+
+  - name: Mount NFS share now
+    mount:
+      path: /mnt/nano-ssd
+      src: 192.168.50.150:/mnt/ssd/models
+      fstype: nfs
+      opts: defaults,noatime
+      state: mounted
+
+  - name: Enable and start Entropy Daemon (haveged)
+    systemd:
+      name: haveged
+      enabled: yes
+      state: started
+
+  - name: Create Cluster Initialization systemd service
+    copy:
+      dest: /etc/systemd/system/cluster-init.service
+      mode: '0644'
+      content: |
+        [Unit]
+        Description=Jetson Cluster Init (power, clocks, firewall)
+        After=network.target
+
+        [Service]
+        Type=oneshot
+        ExecStart=/bin/bash -c 'nvpmodel -m 0 && jetson_clocks && ufw allow 50052/tcp && ufw allow 2049/tcp'
+        RemainAfterExit=yes
+
+        [Install]
+        WantedBy=multi-user.target
+
+  - name: Enable and start Cluster Initialization service
+    systemd:
+      name: cluster-init.service
+      enabled: yes
+      state: started
+      daemon_reload: yes
+
+  - name: Ensure UFW Firewall is actively enabled
+    ufw:
+      state: enabled
+      policy: allow
+
+  - name: Apply Kernel & VMM sysctl overrides
+    sysctl:
+      name: "{{ item.name }}"
+      value: "{{ item.value }}"
+      state: present
+      reload: yes
+    loop:
+    - { name: 'vm.min_free_kbytes', value: '131072' }
+    - { name: 'vm.compaction_proactiveness', value: '100' }
+    - { name: 'vm.swappiness', value: '100' }
+    - { name: 'vm.overcommit_memory', value: '2' }
+    - { name: 'vm.overcommit_ratio', value: '80' }
+    - { name: 'net.ipv4.tcp_rmem', value: '4096 87380 4194304' }
+    - { name: 'net.ipv4.tcp_wmem', value: '4096 65536 4194304' }
+    - { name: 'fs.file-max', value: '2097152' }
+    - { name: 'net.core.rmem_max', value: '16777216' }
+    - { name: 'net.core.wmem_max', value: '16777216' }
+    - { name: 'net.core.netdev_max_backlog', value: '10000' }
+    - { name: 'net.ipv4.tcp_slow_start_after_idle', value: '0' }
+    - { name: 'net.ipv4.tcp_keepalive_time', value: '15' }
+    - { name: 'vm.nr_hugepages', value: '512' }
+
+  - name: Configure Bootloader for Memory Contiguity (CMA)
+    lineinfile:
+      path: /boot/extlinux/extlinux.conf
+      regexp: '^APPEND'
+      line: 'APPEND ${cbootargs} cma=512M coherent_pool=64M alloc_as_vram=1'
+    notify: Reboot Node
+
+  - name: Create Llama.cpp RPC Daemon systemd service (with GPU groups + memory safety)
+    copy:
+      dest: /etc/systemd/system/llama-rpc.service
+      mode: '0644'
+      content: |
+        [Unit]
+        Description=Llama.cpp RPC Slave Server Engine
+        After=network.target cluster-init.service
+        Wants=cluster-init.service
+
+        [Service]
+        Type=simple
+        User=jetson
+        Groups=video,crypto
+        WorkingDirectory=/home/jetson/llama.cpp
+        ExecStart=/home/jetson/llama.cpp/build/bin/rpc-server --host 0.0.0.0 --port 50052
+
+        Restart=always
+        RestartSec=2s
+        StartLimitIntervalSec=30s
+        StartLimitBurst=5
+
+        MemoryAccounting=yes
+        MemoryMax=3850M
+        MemoryHigh=3700M
+        OOMPolicy=stop
+
+        [Install]
+        WantedBy=multi-user.target
+
+  - name: Enable and start Llama.cpp RPC Daemon
+    systemd:
+      name: llama-rpc.service
+      enabled: yes
+      state: started
+      daemon_reload: yes
+
+  - name: Reclaim VRAM by forcing multi-user (headless) target
+    file:
+      src: /lib/systemd/system/multi-user.target
+      dest: /etc/systemd/system/default.target
+      state: link
+      force: yes
+    when: ansible_host != "192.168.50.150"
+    notify: Reboot Node
+
+  # --- OOM Guard (Self-Healing) ---
+  - name: Grant passwordless sudo for OOM guard (fuser + systemctl restart)
+    copy:
+      dest: /etc/sudoers.d/jetson-oom-guard
+      mode: '0440'
+      content: |
+        jetson ALL=(root) NOPASSWD: /usr/bin/fuser -k 50052/tcp, /usr/bin/systemctl restart llama-rpc.service
+
+  - name: Create Local Out-Of-Memory Guard Script
+    copy:
+      dest: /home/jetson/oom_guard.sh
+      owner: jetson
+      group: jetson
+      mode: '0755'
+      content: |
+        #!/bin/bash
+        while true; do
+            if ! pgrep -f "rpc-server" > /dev/null; then
+                sudo fuser -k 50052/tcp 2>/dev/null
+            fi
+            FREE_RAM=$(awk '/MemAvailable/ {print $2}' /proc/meminfo)
+            if [ "$FREE_RAM" -lt 152400 ]; then
+                echo "CRITICAL: Extreme VRAM/RAM bottleneck detected. Forcing clean state purge..." | wall
+                sudo systemctl restart llama-rpc.service
+                sleep 10
+            fi
+            sleep 3
+        done
+
+  - name: Create OOM Guard Systemd Worker Unit
+    copy:
+      dest: /etc/systemd/system/oom-guard.service
+      mode: '0644'
+      content: |
+        [Unit]
+        Description=Jetson Hardware Unified Memory Guard
+        After=llama-rpc.service
+
+        [Service]
+        Type=simple
+        ExecStart=/bin/bash /home/jetson/oom_guard.sh
+        Restart=always
+        RestartSec=5s
+
+        [Install]
+        WantedBy=multi-user.target
+
+  - name: Deploy and Activate Self-Healing Systems
+    systemd:
+      name: "{{ item }}"
+      enabled: yes
+      state: started
+      daemon_reload: yes
+    loop:
+    - llama-rpc.service
+    - oom-guard.service
+
+  handlers:
+  - name: Reboot Node
+    reboot:
+      reboot_timeout: 300

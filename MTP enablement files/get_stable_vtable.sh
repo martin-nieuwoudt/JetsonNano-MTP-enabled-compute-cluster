@@ -1,0 +1,2 @@
+#!/bin/bash
+ssh -o BatchMode=yes -o ConnectTimeout=10 jetson@192.168.50.150 'bash -c "grep -B5 -A20 \"static const ggml_backend_i ggml_backend_cuda_interface\" /home/jetson/llama.cpp/ggml/src/ggml-cuda/ggml-cuda.cu"' > /mnt/c/Users/marti/Desktop/Cluster/stable_vtable.txt 2>&1

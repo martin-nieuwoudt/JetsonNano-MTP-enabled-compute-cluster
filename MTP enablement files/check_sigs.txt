@@ -1,0 +1,2 @@
+2784:static void ggml_backend_cuda_set_tensor_async(ggml_backend_t backend, ggml_tensor * tensor, const void * data, size_t offset, size_t size) {
+4249:    /* .set_tensor_async        = */ ggml_backend_cuda_set_tensor_async,

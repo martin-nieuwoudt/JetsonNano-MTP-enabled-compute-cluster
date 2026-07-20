@@ -1,0 +1,347 @@
+# OS & Kernel
+cat /etc/os-release
+uname -a
+
+# Compilers & Build Tools
+gcc --version
+gcc-8 --version
+gcc-10 --version
+g++ --version
+g++-8 --version
+g++-10 --version
+nvcc --version
+cmake --version
+make --version
+
+# CUDA
+cat /usr/local/cuda/version.txt 2>/dev/null || cat /usr/local/cuda/version.json 2>/dev/null || echo "CUDA version file not found"
+ls /usr/local/cuda/bin/nvcc
+
+# Key Libraries
+dpkg -l | grep -E '(cuda|nvidia|cuda|cufft|cublas|curand|cusolver|cusparse|nccl|openblas|lapack|protobuf|grpc|absl|re2|zlib|ssl|crypto)'
+
+# Python & pip packages
+python3 --version
+pip3 list 2>/dev/null | head -30
+
+# Git & llama.cpp commit
+cd ~/llama.cpp && git log -1 --oneline
+
+# Systemd services
+systemctl list-unit-files | grep -E '(llama|cluster|oom|nfs|rpcbind)'
+
+# Kernel modules
+lsmod | grep -E '(nvidia|nv|tegra)'
+
+# Disk info
+lsblk -f
+df -h /
+
+
+jetson@nano:~$ # OS & Kernel
+jetson@nano:~$ cat /etc/os-release
+NAME="Ubuntu"
+VERSION="20.04.6 LTS (Focal Fossa)"
+ID=ubuntu
+ID_LIKE=debian
+PRETTY_NAME="Ubuntu 20.04.6 LTS"
+VERSION_ID="20.04"
+HOME_URL="https://www.ubuntu.com/"
+SUPPORT_URL="https://help.ubuntu.com/"
+BUG_REPORT_URL="https://bugs.launchpad.net/ubuntu/"
+PRIVACY_POLICY_URL="https://www.ubuntu.com/legal/terms-and-policies/privacy-policy"
+VERSION_CODENAME=focal
+UBUNTU_CODENAME=focal
+jetson@nano:~$ uname -a
+Linux nano 4.9.253-tegra #1 SMP PREEMPT Mon Jul 26 12:13:06 PDT 2021 aarch64 aarch64 aarch64 GNU/Linux
+jetson@nano:~$
+jetson@nano:~$ # Compilers & Build Tools
+jetson@nano:~$ gcc --version
+gcc (Ubuntu 10.5.0-1ubuntu1~20.04) 10.5.0
+Copyright (C) 2020 Free Software Foundation, Inc.
+This is free software; see the source for copying conditions.  There is NO
+warranty; not even for MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+
+jetson@nano:~$ gcc-8 --version
+gcc-8 (Ubuntu/Linaro 8.4.0-3ubuntu2) 8.4.0
+Copyright (C) 2018 Free Software Foundation, Inc.
+This is free software; see the source for copying conditions.  There is NO
+warranty; not even for MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+
+jetson@nano:~$ gcc-10 --version
+gcc-10 (Ubuntu 10.5.0-1ubuntu1~20.04) 10.5.0
+Copyright (C) 2020 Free Software Foundation, Inc.
+This is free software; see the source for copying conditions.  There is NO
+warranty; not even for MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+
+jetson@nano:~$ g++ --version
+g++ (Ubuntu 10.5.0-1ubuntu1~20.04) 10.5.0
+Copyright (C) 2020 Free Software Foundation, Inc.
+This is free software; see the source for copying conditions.  There is NO
+warranty; not even for MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+
+jetson@nano:~$ g++-8 --version
+g++-8 (Ubuntu/Linaro 8.4.0-3ubuntu2) 8.4.0
+Copyright (C) 2018 Free Software Foundation, Inc.
+This is free software; see the source for copying conditions.  There is NO
+warranty; not even for MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+
+jetson@nano:~$ g++-10 --version
+g++-10 (Ubuntu 10.5.0-1ubuntu1~20.04) 10.5.0
+Copyright (C) 2020 Free Software Foundation, Inc.
+This is free software; see the source for copying conditions.  There is NO
+warranty; not even for MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+
+jetson@nano:~$ nvcc --version
+nvcc: NVIDIA (R) Cuda compiler driver
+Copyright (c) 2005-2021 NVIDIA Corporation
+Built on Sun_Feb_28_22:34:44_PST_2021
+Cuda compilation tools, release 10.2, V10.2.300
+Build cuda_10.2_r440.TC440_70.29663091_0
+jetson@nano:~$ cmake --version
+cmake version 4.3.4
+
+CMake suite maintained and supported by Kitware (kitware.com/cmake).
+jetson@nano:~$ make --version
+GNU Make 4.2.1
+Built for aarch64-unknown-linux-gnu
+Copyright (C) 1988-2016 Free Software Foundation, Inc.
+License GPLv3+: GNU GPL version 3 or later <http://gnu.org/licenses/gpl.html>
+This is free software: you are free to change and redistribute it.
+There is NO WARRANTY, to the extent permitted by law.
+jetson@nano:~$
+jetson@nano:~$ # CUDA
+jetson@nano:~$ cat /usr/local/cuda/version.txt 2>/dev/null || cat /usr/local/cuda/version.json 2>/dev/null || echo "CUDA version file not found"
+CUDA Version 10.2.300
+jetson@nano:~$ ls /usr/local/cuda/bin/nvcc
+/usr/local/cuda/bin/nvcc
+jetson@nano:~$
+jetson@nano:~$ # Key Libraries
+jetson@nano:~$ dpkg -l | grep -E '(cuda|nvidia|cuda|cufft|cublas|curand|cusolver|cusparse|nccl|openblas|lapack|protobuf|grpc|absl|re2|zlib|ssl|crypto)'
+ii  cuda-command-line-tools-10-2               10.2.460-1                                 arm64        CUDA command-line tools
+ii  cuda-compiler-10-2                         10.2.460-1                                 arm64        CUDA compiler
+ii  cuda-cudart-10-2                           10.2.300-1                                 arm64        CUDA Runtime native Libraries
+ii  cuda-cudart-dev-10-2                       10.2.300-1                                 arm64        CUDA Runtime native dev links, headers
+ii  cuda-cuobjdump-10-2                        10.2.300-1                                 arm64        CUDA cuobjdump
+ii  cuda-cupti-10-2                            10.2.300-1                                 arm64        CUDA profiling tools runtime libs.
+ii  cuda-cupti-dev-10-2                        10.2.300-1                                 arm64        CUDA profiling tools interface.
+ii  cuda-documentation-10-2                    10.2.300-1                                 arm64        CUDA documentation
+ii  cuda-driver-dev-10-2                       10.2.300-1                                 arm64        CUDA Driver native dev stub library
+ii  cuda-gdb-10-2                              10.2.300-1                                 arm64        CUDA-GDB
+ii  cuda-libraries-10-2                        10.2.460-1                                 arm64        CUDA Libraries 10.2 meta-package
+ii  cuda-libraries-dev-10-2                    10.2.460-1                                 arm64        CUDA Libraries 10.2 development meta-package
+ii  cuda-memcheck-10-2                         10.2.300-1                                 arm64        CUDA-MEMCHECK
+ii  cuda-nvcc-10-2                             10.2.300-1                                 arm64        CUDA nvcc
+ii  cuda-nvdisasm-10-2                         10.2.300-1                                 arm64        CUDA disassembler
+ii  cuda-nvgraph-10-2                          10.2.300-1                                 arm64        NVGRAPH native runtime libraries
+ii  cuda-nvgraph-dev-10-2                      10.2.300-1                                 arm64        NVGRAPH native dev links, headers
+ii  cuda-nvml-dev-10-2                         10.2.300-1                                 arm64        NVML native dev links, headers
+ii  cuda-nvprof-10-2                           10.2.300-1                                 arm64        CUDA Profiler tools
+ii  cuda-nvprune-10-2                          10.2.300-1                                 arm64        CUDA nvprune
+ii  cuda-nvrtc-10-2                            10.2.300-1                                 arm64        NVRTC native runtime libraries
+ii  cuda-nvrtc-dev-10-2                        10.2.300-1                                 arm64        NVRTC native dev links, headers
+ii  cuda-nvtx-10-2                             10.2.300-1                                 arm64        NVIDIA Tools Extension
+ii  cuda-repo-l4t-10-2-local                   10.2.460-1                                 arm64        cuda repository configuration files
+ii  cuda-samples-10-2                          10.2.300-1                                 arm64        CUDA example applications
+ii  cuda-toolkit-10-2                          10.2.460-1                                 arm64        CUDA Toolkit 10.2 meta-package
+ii  cuda-tools-10-2                            10.2.460-1                                 arm64        CUDA Tools meta-package
+ii  cuda-visual-tools-10-2                     10.2.460-1                                 arm64        CUDA visual tools
+ii  gcr                                        3.36.0-2build1                             arm64        GNOME crypto services (daemon and tools)
+ii  gpg-agent                                  2.2.19-3ubuntu2.5                          arm64        GNU privacy guard - cryptographic agent
+ii  graphsurgeon-tf                            8.0.1-1+cuda10.2                           arm64        GraphSurgeon for TensorRT package
+ii  libblockdev-crypto2:arm64                  2.23-2ubuntu3                              arm64        Crypto plugin for libblockdev
+ii  libcublas-dev                              10.2.3.300-1                               arm64        CUBLAS native dev links, headers
+ii  libcublas10                                10.2.3.300-1                               arm64        CUBLAS native runtime libraries
+ii  libcudnn8                                  8.2.1.32-1+cuda10.2                        arm64        cuDNN runtime libraries
+ii  libcudnn8-dev                              8.2.1.32-1+cuda10.2                        arm64        cuDNN development libraries and headers
+ii  libcudnn8-samples                          8.2.1.32-1+cuda10.2                        arm64        cuDNN documents and samples
+ii  libcufft-10-2                              10.1.2.300-1                               arm64        CUFFT native runtime libraries
+ii  libcufft-dev-10-2                          10.1.2.300-1                               arm64        CUFFT native dev links, headers
+ii  libcurand-10-2                             10.1.2.300-1                               arm64        CURAND native runtime libraries
+ii  libcurand-dev-10-2                         10.1.2.300-1                               arm64        CURAND native dev links, headers
+ii  libcurl4-openssl-dev:arm64                 7.68.0-1ubuntu2.25                         arm64        development files and documentation for libcurl (OpenSSL flavour)
+ii  libcusolver-10-2                           10.3.0.300-1                               arm64        CUDA solver native runtime libraries
+ii  libcusolver-dev-10-2                       10.3.0.300-1                               arm64        CUDA solver native dev links, headers
+ii  libcusparse-10-2                           10.3.1.300-1                               arm64        CUSPARSE native runtime libraries
+ii  libcusparse-dev-10-2                       10.3.1.300-1                               arm64        CUSPARSE native dev links, headers
+ii  libdjvulibre21:arm64                       3.5.27.1-14ubuntu0.1                       arm64        Runtime support for the DjVu image format
+ii  libevent-openssl-2.1-7:arm64               2.1.11-stable-1                            arm64        Asynchronous event notification library (openssl)
+ii  libflac8:arm64                             1.3.3-1ubuntu0.2                           arm64        Free Lossless Audio Codec - runtime C library
+ii  libhcrypto4-heimdal:arm64                  7.7.0+dfsg-1ubuntu1.4                      arm64        Heimdal Kerberos - crypto library
+ii  libhogweed5:arm64                          3.5.1+really3.5.1-2ubuntu0.2               arm64        low level cryptographic library (public-key cryptos)
+ii  libio-socket-ssl-perl                      2.067-1                                    all          Perl module implementing object oriented interface to SSL sockets
+ii  libk5crypto3:arm64                         1.17-6ubuntu4.11                           arm64        MIT Kerberos runtime libraries - Crypto Library
+ii  liblapack-dev:arm64                        3.9.0-1build1                              arm64        Library of linear algebra routines 3 - static version
+ii  liblapack3:arm64                           3.9.0-1build1                              arm64        Library of linear algebra routines 3 - shared version
+ii  liblapacke:arm64                           3.9.0-1build1                              arm64        Library of linear algebra routines 3 - C lib shared version
+ii  liblapacke-dev:arm64                       3.9.0-1build1                              arm64        Library of linear algebra routines 3 () - Headers
+rc  libmhash2:arm64                            0.9.9.9-7                                  arm64        Library for cryptographic hashing and message authentication
+ii  libnet-smtp-ssl-perl                       1.04-1                                     all          Perl module providing SSL support to Net::SMTP
+ii  libnet-ssleay-perl                         1.88-2ubuntu1                              arm64        Perl module for Secure Sockets Layer (SSL)
+ii  libnettle7:arm64                           3.5.1+really3.5.1-2ubuntu0.2               arm64        low level cryptographic library (symmetric and one-way cryptos)
+ii  libnvidia-container-tools                  0.10.0+jetpack                             arm64        NVIDIA container runtime library (command-line tools)
+ii  libnvidia-container0:arm64                 0.10.0+jetpack                             arm64        NVIDIA container runtime library
+ii  libnvinfer-bin                             8.0.1-1+cuda10.2                           arm64        TensorRT binaries
+ii  libnvinfer-dev                             8.0.1-1+cuda10.2                           arm64        TensorRT development libraries and headers
+ii  libnvinfer-doc                             8.0.1-1+cuda10.2                           all          TensorRT documentation
+ii  libnvinfer-plugin-dev                      8.0.1-1+cuda10.2                           arm64        TensorRT plugin libraries
+ii  libnvinfer-plugin8                         8.0.1-1+cuda10.2                           arm64        TensorRT plugin libraries
+ii  libnvinfer-samples                         8.0.1-1+cuda10.2                           all          TensorRT samples
+ii  libnvinfer8                                8.0.1-1+cuda10.2                           arm64        TensorRT runtime libraries
+ii  libnvonnxparsers-dev                       8.0.1-1+cuda10.2                           arm64        TensorRT ONNX libraries
+ii  libnvonnxparsers8                          8.0.1-1+cuda10.2                           arm64        TensorRT ONNX libraries
+ii  libnvparsers-dev                           8.0.1-1+cuda10.2                           arm64        TensorRT parsers libraries
+ii  libnvparsers8                              8.0.1-1+cuda10.2                           arm64        TensorRT parsers libraries
+ii  libopenblas-dev:arm64                      0.3.8+ds-1ubuntu0.20.04.1                  arm64        Optimized BLAS (linear algebra) library (dev, meta)
+ii  libopenblas-pthread-dev:arm64              0.3.8+ds-1ubuntu0.20.04.1                  arm64        Optimized BLAS (linear algebra) library (dev, pthread)
+ii  libopenblas0:arm64                         0.3.8+ds-1ubuntu0.20.04.1                  arm64        Optimized BLAS (linear algebra) library (meta)
+ii  libopenblas0-pthread:arm64                 0.3.8+ds-1ubuntu0.20.04.1                  arm64        Optimized BLAS (linear algebra) library (shared lib, pthread)
+ii  libpcre2-16-0:arm64                        10.34-7ubuntu0.1                           arm64        New Perl Compatible Regular Expression Library - 16 bit runtime files
+ii  libpcre2-32-0:arm64                        10.34-7ubuntu0.1                           arm64        New Perl Compatible Regular Expression Library - 32 bit runtime files
+ii  libpcre2-8-0:arm64                         10.34-7ubuntu0.1                           arm64        New Perl Compatible Regular Expression Library- 8 bit runtime files
+ii  libpcre2-dev:arm64                         10.34-7ubuntu0.1                           arm64        New Perl Compatible Regular Expression Library - development files
+ii  libpcre2-posix2:arm64                      10.34-7ubuntu0.1                           arm64        New Perl Compatible Regular Expression Library - posix-compatible runtime files
+ii  libprotobuf-dev:arm64                      3.6.1.3-2ubuntu5.2                         arm64        protocol buffers C++ library (development files) and proto files
+ii  libprotobuf-lite17:arm64                   3.6.1.3-2ubuntu5.2                         arm64        protocol buffers C++ library (lite version)
+ii  libprotobuf17:arm64                        3.6.1.3-2ubuntu5.2                         arm64        protocol buffers C++ library
+ii  libsodium23:arm64                          1.0.18-1                                   arm64        Network communication, cryptography and signaturing library
+ii  libssl1.0.0:arm64                          1.0.2n-1ubuntu5.7                          arm64        Secure Sockets Layer toolkit - shared libraries
+ii  libssl1.1:arm64                            1.1.1f-1ubuntu2.24                         arm64        Secure Sockets Layer toolkit - shared libraries
+ii  libvncclient1:arm64                        0.9.12+dfsg-9ubuntu0.3                     arm64        API to write one's own VNC server - client library
+ii  libwavpack1:arm64                          5.2.0-1ubuntu0.1                           arm64        audio codec (lossy and lossless) - library
+ii  libzstd1:arm64                             1.4.4+dfsg-3ubuntu0.1                      arm64        fast lossless compression algorithm
+ii  nvidia-container-csv-cuda                  10.2.460-1                                 arm64        Jetpack CUDA CSV file
+ii  nvidia-container-csv-cudnn                 8.2.1.32-1+cuda10.2                        arm64        Jetpack CUDNN CSV file
+ii  nvidia-container-csv-tensorrt              8.0.1.6-1+cuda10.2                         arm64        Jetpack TensorRT CSV file
+ii  nvidia-container-csv-visionworks           1.6.0.501                                  arm64        Jetpack VisionWorks CSV file
+ii  nvidia-container-runtime                   3.1.0-1                                    arm64        NVIDIA container runtime
+ii  nvidia-container-toolkit                   1.0.1-1                                    arm64        NVIDIA container runtime hook
+ii  nvidia-docker2                             2.2.0-1                                    all          nvidia-docker CLI wrapper
+ii  nvidia-l4t-3d-core                         32.6.1-20210916211029                      arm64        NVIDIA GL EGL Package
+ii  nvidia-l4t-apt-source                      32.6.1-20210726122000                      arm64        NVIDIA L4T apt source list debian package
+ii  nvidia-l4t-bootloader                      32.6.1-20210726122000                      arm64        NVIDIA Bootloader Package
+ii  nvidia-l4t-camera                          32.6.1-20210916211029                      arm64        NVIDIA Camera Package
+ii  nvidia-l4t-configs                         32.6.1-20210726122000                      arm64        NVIDIA configs debian package
+ii  nvidia-l4t-core                            32.6.1-20210726122000                      arm64        NVIDIA Core Package
+ii  nvidia-l4t-cuda                            32.6.1-20210916211029                      arm64        NVIDIA CUDA Package
+ii  nvidia-l4t-firmware                        32.6.1-20210916211029                      arm64        NVIDIA Firmware Package
+ii  nvidia-l4t-gputools                        32.6.1-20210726122000                      arm64        NVIDIA dgpu helper Package
+ii  nvidia-l4t-graphics-demos                  32.6.1-20210916211029                      arm64        NVIDIA graphics demo applications
+ii  nvidia-l4t-gstreamer                       32.6.1-20210916211029                      arm64        NVIDIA GST Application files
+ii  nvidia-l4t-init                            32.6.1-20210916211029                      arm64        NVIDIA Init debian package
+ii  nvidia-l4t-initrd                          32.6.1-20210726122000                      arm64        NVIDIA initrd debian package
+ii  nvidia-l4t-jetson-io                       32.6.1-20210726122000                      arm64        NVIDIA Jetson.IO debian package
+ii  nvidia-l4t-jetson-multimedia-api           32.6.1-20210916211029                      arm64        NVIDIA Jetson Multimedia API is a collection of lower-level APIs that support flexible application development.
+ii  nvidia-l4t-kernel                          4.9.253-tegra-32.6.1-20210726122000        arm64        NVIDIA Kernel Package
+ii  nvidia-l4t-kernel-dtbs                     4.9.253-tegra-32.6.1-20210726122000        arm64        NVIDIA Kernel DTB Package
+ii  nvidia-l4t-kernel-headers                  4.9.253-tegra-32.6.1-20210726122000        arm64        NVIDIA Linux Tegra Kernel Headers Package
+ii  nvidia-l4t-libvulkan                       32.6.1-20210916211029                      arm64        NVIDIA Vulkan Loader Package
+ii  nvidia-l4t-multimedia                      32.6.1-20210916211029                      arm64        NVIDIA Multimedia Package
+ii  nvidia-l4t-multimedia-utils                32.6.1-20210916211029                      arm64        NVIDIA Multimedia Package
+ii  nvidia-l4t-oem-config                      32.6.1-20210726122000                      arm64        NVIDIA OEM-Config Package
+ii  nvidia-l4t-tools                           32.6.1-20210726122000                      arm64        NVIDIA Public Test Tools Package
+ii  nvidia-l4t-wayland                         32.6.1-20210916211029                      arm64        NVIDIA Wayland Package
+ii  nvidia-l4t-weston                          32.6.1-20210916211029                      arm64        NVIDIA Weston Package
+ii  nvidia-l4t-x11                             32.6.1-20210916211029                      arm64        NVIDIA X11 Package
+ii  nvidia-l4t-xusb-firmware                   32.6.1-20210726122000                      arm64        NVIDIA USB Firmware Package
+ii  openssl                                    1.1.1f-1ubuntu2.24                         arm64        Secure Sockets Layer toolkit - cryptographic utility
+ii  perl-openssl-defaults:arm64                4                                          arm64        version compatibility baseline for Perl OpenSSL packages
+ii  protobuf-compiler                          3.6.1.3-2ubuntu5.2                         arm64        compiler for protocol buffer definition files
+ii  python3-cryptography                       2.8-3ubuntu0.3                             arm64        Python library exposing cryptographic recipes and primitives (Python 3)
+ii  python3-protobuf                           3.6.1.3-2ubuntu5.2                         arm64        Python 3 bindings for protocol buffers
+ii  ssl-cert                                   1.0.39                                     all          simple debconf wrapper for OpenSSL
+ii  tensorrt                                   8.0.1.6-1+cuda10.2                         arm64        Meta package of TensorRT
+ii  uff-converter-tf                           8.0.1-1+cuda10.2                           arm64        UFF converter for TensorRT package
+ii  zlib1g:arm64                               1:1.2.11.dfsg-2ubuntu1.5                   arm64        compression library - runtime
+ii  zlib1g-dev:arm64                           1:1.2.11.dfsg-2ubuntu1.5                   arm64        compression library - development
+jetson@nano:~$
+jetson@nano:~$ # Python & pip packages
+jetson@nano:~$ python3 --version
+Python 3.8.10
+jetson@nano:~$ pip3 list 2>/dev/null | head -30
+Package                 Version
+----------------------- --------------------
+absl-py                 0.13.0
+apturl                  0.5.2
+astunparse              1.6.3
+atomicwrites            1.1.5
+attrs                   19.3.0
+bcrypt                  3.1.7
+beautifulsoup4          4.8.2
+blinker                 1.4
+Brlapi                  0.7.0
+cachetools              4.2.2
+certifi                 2019.11.28
+chardet                 3.0.4
+charset-normalizer      2.0.6
+Click                   7.0
+colorama                0.4.3
+command-not-found       0.3
+cryptography            2.8
+cupshelpers             1.0
+cycler                  0.10.0
+Cython                  0.29.21
+dbus-python             1.2.16
+decorator               4.4.2
+defer                   1.0.6
+distro                  1.4.0
+distro-info             0.23+ubuntu1.1
+duplicity               0.8.12.0
+entrypoints             0.3
+et-xmlfile              1.0.1
+jetson@nano:~$
+jetson@nano:~$ # Git & llama.cpp commit
+jetson@nano:~$ cd ~/llama.cpp && git log -1 --oneline
+667d72846 (HEAD, tag: b4501) rpc : early register backend devices (#11262)
+jetson@nano:~/llama.cpp$
+jetson@nano:~/llama.cpp$ # Systemd services
+jetson@nano:~/llama.cpp$ systemctl list-unit-files | grep -E '(llama|cluster|oom|nfs|rpcbind)'
+proc-fs-nfsd.mount                         static          enabled
+llama-rpc.service                          enabled         enabled
+nfs-blkmap.service                         disabled        enabled
+nfs-common.service                         masked          enabled
+nfs-config.service                         static          enabled
+nfs-idmapd.service                         static          enabled
+nfs-kernel-server.service                  enabled         enabled
+nfs-mountd.service                         static          enabled
+nfs-server.service                         enabled         enabled
+nfs-utils.service                          static          enabled
+rpcbind.service                            enabled         enabled
+rpcbind.socket                             enabled         enabled
+nfs-client.target                          enabled         enabled
+rpcbind.target                             static          disabled
+jetson@nano:~/llama.cpp$
+jetson@nano:~/llama.cpp$ # Kernel modules
+jetson@nano:~/llama.cpp$ lsmod | grep -E '(nvidia|nv|tegra)'
+nvgpu                1589200  30
+jetson@nano:~/llama.cpp$
+jetson@nano:~/llama.cpp$ # Disk info
+jetson@nano:~/llama.cpp$ lsblk -f
+NAME         FSTYPE   LABEL      UUID                                 FSAVAIL FSUSE% MOUNTPOINT
+loop0        squashfs                                                       0   100% /snap/bare/5
+loop1        squashfs                                                       0   100% /snap/snapd/19459
+loop2        squashfs                                                       0   100% /snap/snapd/20102
+loop3        vfat     L4T-README 1234-ABCD
+mtdblock0
+mmcblk0
+├─mmcblk0p1  ext4                b1c100cd-cc74-4e7f-acb8-f0d34c931ee8  195,8M    95% /
+├─mmcblk0p2
+├─mmcblk0p3
+├─mmcblk0p4
+├─mmcblk0p5
+├─mmcblk0p6
+├─mmcblk0p7
+├─mmcblk0p8
+├─mmcblk0p9
+├─mmcblk0p10
+├─mmcblk0p11
+├─mmcblk0p12
+├─mmcblk0p13
+└─mmcblk0p14
+zram0                                                                                [SWAP]
+zram1                                                                                [SWAP]
+zram2                                                                                [SWAP]
+zram3                                                                                [SWAP]
+jetson@nano:~/llama.cpp$ df -h /
+Filesystem      Size  Used Avail Use% Mounted on
+/dev/mmcblk0p1   26G   24G  196M 100% /

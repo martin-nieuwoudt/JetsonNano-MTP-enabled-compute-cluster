@@ -1,0 +1,59 @@
+# shared_skills.yml
+# One NeMo Agent Toolkit MCP server exposing ALL shared skills to every agent
+# (Copilot, hermes-*, jetson-cluster) via the mcp_client function group.
+#
+# Serve with:
+#   nat mcp serve --config_file configs/shared_skills.yml --port 9901
+#
+# Agents connect with transport: streamable-http, url: http://localhost:9901/mcp
+
+functions:
+  # --- Custom Phase 2 simulation skills (registered by the cluster_skills plugin) ---
+  phase2_method:
+    _type: phase2_method
+  phase2_list_methods:
+    _type: phase2_list_methods
+  recursive_entropy_optimize:
+    _type: recursive_entropy_optimize
+
+  # --- NAT built-in Core skills (no external creds required) ---
+  code_execution:
+    _type: code_execution
+    sandbox_type: local
+    uri: http://127.0.0.1:6000/
+    timeout: 30.0
+    max_output_characters: 4000
+  current_datetime:
+    _type: current_datetime
+  current_timezone:
+    _type: current_timezone
+  # chat_completion requires an `llm_name` (LLM provider config). Add once an
+  # LLM backend (e.g. NIM / local Qwythos) is registered in the config:
+  # chat_completion:
+  #   _type: chat_completion
+  #   llm_name: <registered_llm>
+  # --- NAT built-in Eval / judge skills ---
+  # These require sub-config (llm_name, planner, selector, augmented_fn, ...)
+  # and the `nvidia-nat` workflow extra. Enable once those are provisioned:
+  # multi_llm_judge_function:
+  #   _type: multi_llm_judge_function
+  # plan_select_execute_function:
+  #   _type: plan_select_execute_function
+  # ttc_tool_orchestration:
+  #   _type: ttc_tool_orchestration
+  # ttc_tool_wrapper:
+  #   _type: ttc_tool_wrapper
+
+  # --- NAT built-in RAG + search skills (require a retriever/vector store) ---
+  # Uncomment and configure once a Milvus instance + embedder are available:
+  # nvidia_rag:
+  #   _type: nvidia_rag
+  # nat_retriever:
+  #   _type: nat_retriever
+  # milvus_document_search:
+  #   _type: milvus_document_search
+  # github_files_tool:
+  #   _type: github_files_tool
+
+  # NOTE: No `workflow:` block. `nat mcp serve` hosts these functions as MCP
+  # tools directly — no agent loop required. Agents consume them via mcp_client.

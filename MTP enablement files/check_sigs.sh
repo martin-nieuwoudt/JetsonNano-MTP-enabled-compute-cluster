@@ -1,0 +1,2 @@
+#!/bin/bash
+ssh -o BatchMode=yes -o ConnectTimeout=10 jetson@192.168.50.150 'cd /home/jetson/llama.cpp-mtp/ggml/src/ggml-cuda && grep -n "ggml_backend_cuda_graph_optimize\|ggml_backend_cuda_buffer_init_tensor\|ggml_backend_cuda_buffer_cpy_tensor" ggml-cuda.cu'

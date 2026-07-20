@@ -1,0 +1,11 @@
+# Bootloader Memory Contiguity Parameters for Jetson Nano
+# From: raw refinements.md — Section: Hardware Memory Controller Optimization
+# 
+# File: /boot/extlinux/extlinux.conf
+# Locate the kernel arguments line (APPEND) and inject these parameters:
+cma=512M coherent_pool=64M alloc_as_vram=1
+
+# This forces the kernel to carve out a permanent, block-aligned
+# Contiguous Memory Allocator (CMA) pool specifically for hardware functions.
+# Prevents the Linux kernel from allocating sparse heap objects that
+# fragment the Unified Memory Architecture (UMA) address space.

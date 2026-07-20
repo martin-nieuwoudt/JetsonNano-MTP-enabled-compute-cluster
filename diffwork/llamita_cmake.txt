@@ -1,0 +1,22 @@
+15:         # 80     == Ampere, asynchronous data loading, faster tensor core instructions
+24:         # The default behavior for a non-native is to build virtual architectures as needed to cover all features needed
+93:     # If we try to compile a "native" build it will use the 12X architectures and fail.
+101:     file(GLOB   GGML_HEADERS_CUDA "*.cuh")
+104:     file(GLOB   GGML_SOURCES_CUDA "*.cu")
+105:     list(FILTER GGML_SOURCES_CUDA EXCLUDE REGEX "fattn.*\.cu")
+106:     #file(GLOB   SRCS "template-instances/fattn-tile*.cu")
+108:     #file(GLOB   SRCS "template-instances/fattn-mma*.cu")
+110:     file(GLOB   SRCS "template-instances/mmq*.cu")
+112:     file(GLOB   SRCS "template-instances/mmf*.cu")
+115:     if (GGML_CUDA_FA_ALL_QUANTS)
+116:         #file(GLOB   SRCS "template-instances/fattn-vec*.cu")
+118:         add_compile_definitions(GGML_CUDA_FA_ALL_QUANTS)
+120:         #file(GLOB   SRCS "template-instances/fattn-vec*q4_0-q4_0.cu")
+122:         #file(GLOB   SRCS "template-instances/fattn-vec*q8_0-q8_0.cu")
+124:         #file(GLOB   SRCS "template-instances/fattn-vec*f16-f16.cu")
+152:     if (NOT GGML_CUDA_FA)
+153:         add_compile_definitions(GGML_CUDA_NO_FA)
+189:     set(CUDA_FLAGS -use_fast_math -extended-lambda)
+199:         # - speed (nvcc's default)
+205:     if (GGML_FATAL_WARNINGS)
+260:     message(FATAL_ERROR "CUDA Toolkit not found")

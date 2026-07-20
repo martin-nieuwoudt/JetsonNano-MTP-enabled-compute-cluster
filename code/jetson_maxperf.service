@@ -1,0 +1,24 @@
+# Jetson Max Performance systemd Service
+# From: raw refinements.md — Section: The NVIDIA IoT Agent Framework
+# Hard-pins the memory controller and hardware execution pipes.
+# File: /etc/systemd/system/jetson-maxperf.service
+
+[Unit]
+Description=Pin NVIDIA Jetson Hardware to Max Compute Profile
+After=multi-user.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/sbin/nvpmodel -m 0
+ExecStartPost=/usr/bin/jetson_clocks
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target
+
+# Why this is critical:
+# - nvpmodel -m 0 opens the power gate to 10W
+# - jetson_clocks bypasses the Linux kernel's thermal governor, locking the
+#   LPDDR4 EMC (External Memory Controller) clock straight to 1600 MHz.
+#   This ensures consistent memory bus throughput when streaming matrix
+#   chunks over the network.

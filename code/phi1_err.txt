@@ -1,0 +1,2 @@
+0.30.924.702 E recv failed (bytes_recv=0, size_to_recv=8)
+C:\llama.cpp-mtp\ggml\src\ggml-rpc\ggml-rpc.cpp:498: Remote RPC server crashed or returned malformed response

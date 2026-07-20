@@ -1,0 +1,55 @@
+# ── Python / virtualenv ─────────────────────────────────────────────
+.venv/
+__pycache__/
+*.pyc
+*.pyo
+
+# ── IDE / editor / OS ──────────────────────────────────────────────
+.vscode/
+.vs/
+.opencode/
+.symdl/
+.DS_Store
+Thumbs.db
+
+# ── Runtime state & logs (generated, not source) ──────────────────
+*.log
+*.out
+*.err
+*.pid
+rpc_metrics.json
+cluster_state.json
+chat_uploads/
+
+# ── Secrets / credentials (NEVER commit) ───────────────────────────
+*.pem
+id_rsa*
+*.key
+.hf_token
+.env
+ssh_config.txt
+
+# ── Build artifacts / binaries ─────────────────────────────────────
+*.exe
+*.dll
+*.so
+*.a
+*.o
+*.gguf
+*.gguf.json
+
+# ── Vendored upstream fork (kept as a git submodule, not inline) ───
+mtp_pc_src/
+
+# ── Local tooling / scratch dirs ───────────────────────────────────
+_symdl/
+build/
+
+# ── Reference-model vocab files (not project source) ───────────────
+llamita_ref/models/
+
+# ── Third-party installer (Ventoy) — not project code ─────────────
+ventoy-1.1.16-windows/
+
+# ── OS / launcher shortcuts in repo root ───────────────────────────
+*.lnk

@@ -1,0 +1,13 @@
+
+192.168.50.150 : port=False : bin=NO_BIN
+192.168.50.151 : port=True : bin=MTP_OK
+192.168.50.152 : port=True : bin=MTP_OK
+192.168.50.153 : port=True : bin=MTP_OK
+192.168.50.154 : port=True : bin=MTP_OK
+192.168.50.155 : port=True : bin=MTP_OK
+192.168.50.156 : port=True : bin=MTP_OK
+192.168.50.157 : port=True : bin=MTP_OK
+192.168.50.158 : port=True : bin=MTP_OK
+192.168.50.159 : port=True : bin=MTP_OK
+192.168.50.160 : port=True : bin=MTP_OK
+DONE

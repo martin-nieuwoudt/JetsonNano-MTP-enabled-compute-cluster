@@ -1,0 +1,2 @@
+#!/bin/bash
+ssh -o BatchMode=yes jetson@192.168.50.150 'echo "=== STABLE fattn-tile.cu exists? ==="; ls -la /home/jetson/llamita_cuda/ggml/src/ggml-cuda/fattn-tile.cu 2>&1; echo "=== STABLE fattn-tile.cuh extern/DECL ==="; grep -n "DECL_FATTN_TILE_CASE\|extern DECL\|flash_attn_ext_tile_case" /home/jetson/llamita_cuda/ggml/src/ggml-cuda/fattn-tile.cuh 2>&1; echo "=== STABLE fattn-tile-instance files ==="; ls /home/jetson/llamita_cuda/ggml/src/ggml-cuda/template-instances/ 2>&1 | grep -i tile'

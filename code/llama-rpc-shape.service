@@ -1,0 +1,18 @@
+[Unit]
+Description=llama.cpp RPC egress shaper (anti-incast, Phase 12)
+Before=llama-rpc.service
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+Environment=RPC_SHAPER_IFACE=eth0
+Environment=RPC_SHAPER_RATE=850mbit
+Environment=RPC_SHAPER_BURST=64kb
+Environment=RPC_SHAPER_PORT=50052
+ExecStart=/home/jetson/llama.cpp-mtp/build/bin/apply_rpc_shaper.sh
+TimeoutStartSec=30
+
+[Install]
+WantedBy=multi-user.target

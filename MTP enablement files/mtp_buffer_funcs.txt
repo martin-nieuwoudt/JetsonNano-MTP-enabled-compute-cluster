@@ -1,0 +1,30 @@
+569:struct ggml_backend_cuda_buffer_context {
+574:    ggml_backend_cuda_buffer_context(int device, void * dev_ptr) :
+579:    ~ggml_backend_cuda_buffer_context() {
+584:static void ggml_backend_cuda_buffer_free_buffer(ggml_backend_buffer_t buffer) {
+585:    ggml_backend_cuda_buffer_context * ctx = (ggml_backend_cuda_buffer_context *)buffer->context;
+590:    return buffer->iface.free_buffer == ggml_backend_cuda_buffer_free_buffer;
+593:static void * ggml_backend_cuda_buffer_get_base(ggml_backend_buffer_t buffer) {
+594:    ggml_backend_cuda_buffer_context * ctx = (ggml_backend_cuda_buffer_context *)buffer->context;
+598:static enum ggml_status ggml_backend_cuda_buffer_init_tensor(ggml_backend_buffer_t buffer, ggml_tensor * tensor) {
+599:    ggml_backend_cuda_buffer_context * ctx = (ggml_backend_cuda_buffer_context *)buffer->context;
+619:static void ggml_backend_cuda_buffer_memset_tensor(ggml_backend_buffer_t buffer, ggml_tensor * tensor, uint8_t value, size_t offset, size_t size) {
+620:    ggml_backend_cuda_buffer_context * ctx = (ggml_backend_cuda_buffer_context *)buffer->context;
+627:static void ggml_backend_cuda_buffer_set_tensor(ggml_backend_buffer_t buffer, ggml_tensor * tensor, const void * data, size_t offset, size_t size) {
+628:    ggml_backend_cuda_buffer_context * ctx = (ggml_backend_cuda_buffer_context *)buffer->context;
+635:static void ggml_backend_cuda_buffer_get_tensor(ggml_backend_buffer_t buffer, const ggml_tensor * tensor, void * data, size_t offset, size_t size) {
+636:    ggml_backend_cuda_buffer_context * ctx = (ggml_backend_cuda_buffer_context *)buffer->context;
+643:static bool ggml_backend_cuda_buffer_cpy_tensor(ggml_backend_buffer_t buffer, const ggml_tensor * src, ggml_tensor * dst) {
+645:        ggml_backend_cuda_buffer_context * src_ctx = (ggml_backend_cuda_buffer_context *)src->buffer->context;
+646:        ggml_backend_cuda_buffer_context * dst_ctx = (ggml_backend_cuda_buffer_context *)dst->buffer->context;
+664:static void ggml_backend_cuda_buffer_clear(ggml_backend_buffer_t buffer, uint8_t value) {
+665:    ggml_backend_cuda_buffer_context * ctx = (ggml_backend_cuda_buffer_context *)buffer->context;
+672:static const ggml_backend_buffer_i ggml_backend_cuda_buffer_interface = {
+673:    /* .free_buffer     = */ ggml_backend_cuda_buffer_free_buffer,
+674:    /* .get_base        = */ ggml_backend_cuda_buffer_get_base,
+675:    /* .init_tensor     = */ ggml_backend_cuda_buffer_init_tensor,
+676:    /* .memset_tensor   = */ ggml_backend_cuda_buffer_memset_tensor,
+677:    /* .set_tensor      = */ ggml_backend_cuda_buffer_set_tensor,
+678:    /* .get_tensor      = */ ggml_backend_cuda_buffer_get_tensor,
+679:    /* .cpy_tensor      = */ ggml_backend_cuda_buffer_cpy_tensor,
+680:    /* .clear           = */ ggml_backend_cuda_buffer_clear,

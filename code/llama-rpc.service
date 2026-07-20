@@ -1,0 +1,15 @@
+[Unit]
+Description=llama.cpp MTP RPC server (cluster worker)
+After=network-online.target local-fs.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=jetson
+WorkingDirectory=/home/jetson/llama.cpp-mtp/build/bin
+ExecStart=/home/jetson/llama.cpp-mtp/build/bin/ggml-rpc-server -H 0.0.0.0 -p 50052 -t 4
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

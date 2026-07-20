@@ -1,0 +1,26 @@
+[Unit]
+Description=Phase 3b — Expand root partition to fill the SD card
+# Runs on EVERY boot. The expand script (phase3b_disk_expand.sh) is fully
+# idempotent: growpart is a no-op if the partition already spans the disk and
+# resize2fs is safe to re-run, so re-running each boot is harmless and
+# guarantees the rootfs always fills whatever SD card it is flashed onto.
+# NOTE: ConditionFirstBoot=yes was intentionally REMOVED. On cloned images
+# systemd regenerates /etc/machine-id during early boot (before this unit is
+# evaluated), so that condition is never met and the service was silently
+# skipped — leaving the card unexpanded. Running every boot is the reliable
+# alternative for a cloned fleet and cannot be "forgotten" like a sentinel.
+# Make sure the root filesystem is mounted read-write before we touch it.
+After=local-fs.target
+Before=llama-rpc.service
+
+[Service]
+Type=oneshot
+# Run as root so the script skips sudo (it self-detects uid).
+User=root
+# The expand script lives in the home dir of the build user on the image.
+ExecStart=/bin/bash /home/jetson/phase3b_disk_expand.sh
+RemainAfterExit=yes
+# Don't fail the boot if something unexpected happens — log and continue.
+
+[Install]
+WantedBy=multi-user.target

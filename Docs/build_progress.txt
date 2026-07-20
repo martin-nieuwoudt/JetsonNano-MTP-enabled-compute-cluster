@@ -1,0 +1,22 @@
+/home/jetson/llama.cpp-mtp/ggml/src/ggml-cuda/ggml-cuda.cu(4251): error: a value of type "__nv_bool (*)(ggml_backend_t, ggml_backend_t, const ggml_tensor *, ggml_tensor *)" cannot be used to initialize an entity of type "void (*)(ggml_backend_t, ggml_tensor *, const void *, size_t, size_t, size_t, size_t, size_t)"
+
+/home/jetson/llama.cpp-mtp/ggml/src/ggml-cuda/ggml-cuda.cu(4252): error: a value of type "void (*)(ggml_backend_t)" cannot be used to initialize an entity of type "void (*)(ggml_backend_t, const ggml_tensor *, void *, size_t, size_t, size_t, size_t, size_t)"
+
+/home/jetson/llama.cpp-mtp/ggml/src/ggml-cuda/ggml-cuda.cu(4257): error: a value of type "ggml_status (*)(ggml_backend_t, ggml_cgraph *)" cannot be used to initialize an entity of type "void (*)(ggml_backend_t, ggml_backend_graph_plan_t, const ggml_cgraph *)"
+
+/home/jetson/llama.cpp-mtp/ggml/src/ggml-cuda/ggml-cuda.cu(4258): error: a value of type "void (*)(ggml_backend_t, ggml_backend_event_t)" cannot be used to initialize an entity of type "ggml_status (*)(ggml_backend_t, ggml_backend_graph_plan_t)"
+
+/home/jetson/llama.cpp-mtp/ggml/src/ggml-cuda/ggml-cuda.cu(4259): error: a value of type "void (*)(ggml_backend_t, ggml_backend_event_t)" cannot be used to initialize an entity of type "ggml_status (*)(ggml_backend_t, ggml_cgraph *)"
+
+/home/jetson/llama.cpp-mtp/ggml/src/ggml-cuda/ggml-cuda.cu(4002): warning: function "ggml_backend_cuda_graph_optimize" was declared but never referenced
+
+9 errors detected in the compilation of "/tmp/tmpxft_0002642e_00000000-6_ggml-cuda.cpp1.ii".
+make[3]: *** [ggml/src/ggml-cuda/CMakeFiles/ggml-cuda.dir/build.make:454: ggml/src/ggml-cuda/CMakeFiles/ggml-cuda.dir/ggml-cuda.cu.o] Error 1
+make[3]: *** Waiting for unfinished jobs....
+make[2]: *** [CMakeFiles/Makefile2:1992: ggml/src/ggml-cuda/CMakeFiles/ggml-cuda.dir/all] Error 2
+make[1]: *** [CMakeFiles/Makefile2:5382: tools/rpc/CMakeFiles/ggml-rpc-server.dir/rule] Error 2
+make: *** [Makefile:1947: ggml-rpc-server] Error 2
+BUILD END vr 17 jul 2026 13:01:40 CEST  EXIT=2
+ls: cannot access 'bin/ggml-rpc-server': No such file or directory
+---
+RUNNING

@@ -1,0 +1,23 @@
+{
+  "folders": [
+    {
+      "name": "Windows-Orchestrator",
+      "path": "C:\\path\\to\\your\\local\\llama.cpp"
+    },
+    { "name": "Nano-01-Core", "uri": "vscode-remote://ssh-remote+nano01/home/jetson/llama.cpp" },
+    { "name": "Nano-02-Core", "uri": "vscode-remote://ssh-remote+nano02/home/jetson/llama.cpp" },
+    { "name": "Nano-03-Core", "uri": "vscode-remote://ssh-remote+nano03/home/jetson/llama.cpp" },
+    { "name": "Nano-04-Core", "uri": "vscode-remote://ssh-remote+nano04/home/jetson/llama.cpp" },
+    { "name": "Nano-05-Core", "uri": "vscode-remote://ssh-remote+nano05/home/jetson/llama.cpp" },
+    { "name": "Nano-06-Core", "uri": "vscode-remote://ssh-remote+nano06/home/jetson/llama.cpp" },
+    { "name": "Nano-07-Core", "uri": "vscode-remote://ssh-remote+nano07/home/jetson/llama.cpp" },
+    { "name": "Nano-08-Core", "uri": "vscode-remote://ssh-remote+nano08/home/jetson/llama.cpp" },
+    { "name": "Nano-09-Core", "uri": "vscode-remote://ssh-remote+nano09/home/jetson/llama.cpp" },
+    { "name": "Nano-10-Core", "uri": "vscode-remote://ssh-remote+nano10/home/jetson/llama.cpp" },
+    { "name": "Nano-11-Core", "uri": "vscode-remote://ssh-remote+nano11/home/jetson/llama.cpp" }
+  ],
+  "settings": {
+    "remote.SSH.useLocalServer": true,
+    "remote.SSH.showLoginTerminal": true
+  }
+}

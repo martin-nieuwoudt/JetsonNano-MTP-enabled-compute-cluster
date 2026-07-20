@@ -1,0 +1,14 @@
+[Unit]
+Description=RPC server self-heal watchdog (restarts llama-rpc if port 50052 stops accepting)
+After=network-online.target llama-rpc.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=root
+ExecStart=/home/jetson/llama.cpp-mtp/build/bin/rpc_watchdog.sh
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

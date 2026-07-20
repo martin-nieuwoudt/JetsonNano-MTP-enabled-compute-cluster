@@ -1,0 +1,4 @@
+438:static void ggml_backend_cuda_buffer_init_tensor(ggml_backend_buffer_t buffer, ggml_tensor * tensor) {
+482:static bool ggml_backend_cuda_buffer_cpy_tensor(ggml_backend_buffer_t buffer, const ggml_tensor * src, ggml_tensor * dst) {
+515:    /* .init_tensor     = */ ggml_backend_cuda_buffer_init_tensor,
+519:    /* .cpy_tensor      = */ ggml_backend_cuda_buffer_cpy_tensor,

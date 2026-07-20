@@ -1,0 +1,4 @@
+$ErrorActionPreference = "Continue"
+$prompt = "You are the Strategist for the Anti-Dark-Forest research programme. State the core thesis of Biology as Bounded Information: that a civilisation which destroys or hides from others (the Dark Forest strategy) is thermodynamically and information-theoretically suboptimal compared with one that assimilates, simulates, and seeds. Then outline the six propositions P1 through P6 and, for each, name the simulation method that would test it."
+& "C:\Python314\python.exe" "C:\Users\marti\Desktop\Cluster\code\cluster_infer.py" --build mtp --nodes all --model "C:\Models\Qwythos-9B-Claude-Mythos-5-1M-MTP-Q8_0.gguf" --prompt $prompt --tokens 512 --ctx-size 4096 --tensor-split "1,1,1,1,1,1,1,1,1,1,1" --system-file "C:\Users\marti\Desktop\Cluster\System Prompt.md" --publish --no-qos
+Write-Host "WRAPPER_EXIT=$LASTEXITCODE"

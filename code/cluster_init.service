@@ -1,0 +1,11 @@
+[Unit]
+Description=Jetson Cluster Init (power, clocks, firewall)
+After=network.target
+
+[Service]
+Type=oneshot
+ExecStart=/bin/bash -c 'nvpmodel -m 0 && jetson_clocks && ufw allow 50052/tcp && ufw allow 2049/tcp'
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target

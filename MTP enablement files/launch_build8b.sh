@@ -1,0 +1,19 @@
+#!/bin/bash
+ssh -o BatchMode=yes jetson@192.168.50.150 'bash -s' <<'EOF'
+cd /home/jetson
+rm -f mtp_build.log
+nohup bash -c 'cd /home/jetson/llama.cpp-mtp && rm -rf build && /home/jetson/.local/bin/cmake -B build -S . \
+  -DGGML_CUDA=ON -DGGML_RPC=ON -DGGML_NATIVE=OFF \
+  -DGGML_CPU_ARM_ARCH=armv8.1-a+nolse \
+  -DCMAKE_CUDA_ARCHITECTURES=53 \
+  -DCMAKE_BUILD_TYPE=Release \
+  -DCMAKE_CUDA_COMPILER=/usr/local/cuda-10.2/bin/nvcc \
+  -DCMAKE_CUDA_FLAGS="--compiler-bindir /usr/bin/gcc-8" \
+  -DCMAKE_C_COMPILER=gcc-9 -DCMAKE_CXX_COMPILER=g++-9 \
+  -DCMAKE_CUDA_STANDARD=14 \
+  -DGGML_CUDA_FA=OFF -DGGML_CUDA_GRAPHS=OFF -DGGML_RPC_RDMA=OFF -DGGML_CUDA_NCCL=OFF \
+  && cd build && make -j4 ggml-rpc-server 2>&1 | tail -80 ; echo "BUILD END $(date) EXIT=${PIPESTATUS[0]}" >> /home/jetson/mtp_build.log' \
+  > /home/jetson/mtp_build.log 2>&1 &
+echo "launch pid=$!"
+echo "BUILD START $(date)" >> /home/jetson/mtp_build.log
+EOF

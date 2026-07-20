@@ -1,0 +1,17 @@
+# 1. Check root filesystem (ext4 on mmcblk0p1) — requires unmount, so schedule on next reboot
+sudo tune2fs -l /dev/mmcblk0p1 | grep -i "last checked\|check interval\|mount count"
+sudo touch /forcefsck
+sudo reboot
+
+# 2. Check if fsck ran and found errors
+dmesg -T | grep -i fsck
+sudo fsck.ext4 -n -f /dev/mmcblk0p1
+
+# 3. Surface scan (read-only, non-destructive)
+sudo badblocks -v -s /dev/mmcblk0 2>&1 | tee /home/jetson/sd_scan.log
+
+# 4. Filesystem integrity (read-only)
+sudo fsck.ext4 -n -f /dev/mmcblk0p1
+
+# 5. SMART (if supported)
+sudo smartctl -a /dev/mmcblk0 2>/dev/null || echo "SMART not supported"

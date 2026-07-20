@@ -1,0 +1,16 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "cluster-nat-skills"
+version = "0.1.0"
+description = "Shared NeMo Agent Toolkit skills library for the Jetson cluster + hermes agents"
+requires-python = ">=3.12"
+dependencies = ["nvidia-nat-mcp"]
+
+[project.entry-points.'nat.plugins']
+cluster_skills = "skills.register"
+
+[tool.setuptools]
+py-modules = ["skills"]

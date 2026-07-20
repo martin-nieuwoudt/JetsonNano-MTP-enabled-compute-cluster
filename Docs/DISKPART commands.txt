@@ -1,0 +1,28 @@
+diskpart
+
+list disk
+
+select disk 1
+
+(Note: Ensure Disk 1 is your actual USB drive based on its storage size).
+
+clean
+
+convert mbr   
+
+create partition primary
+
+select partition 1
+
+active
+
+chkdsk E: /f /r  (make sure you select the correct drive letter)
+
+format fs=fat32 quick   (after you have done this you will see the drive in your PC, then you can format and give it a drive letter there)
+
+assign
+
+exit
+
+
+

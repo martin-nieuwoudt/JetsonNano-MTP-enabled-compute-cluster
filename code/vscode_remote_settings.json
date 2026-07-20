@@ -1,0 +1,17 @@
+# VS Code Remote Extension Optimizations for Low-RAM Jetson Nodes
+# From: raw refinements.md — Section: Essential Remote Extension Optimizations
+# Add to User Settings (settings.json) on Windows 11 host.
+# Prevents VS Code background agent (vscode-server) from consuming
+# 300-400MB of precious RAM on each 4GB Jetson Nano.
+
+{
+  "remote.SSH.defaultExtensions": [],
+  "remote.SSH.maxConcurrentConnections": 10,
+  "remote.SSH.connectTimeout": 30,
+  "extensions.autoUpdate": false
+}
+
+# Setting "remote.SSH.defaultExtensions": [] forces VS Code to install
+# zero extensions on the Jetson Nanos themselves. All processing remains
+# on the Windows 11 host, keeping the Nanos stripped bare for pure
+# arithmetic computation.

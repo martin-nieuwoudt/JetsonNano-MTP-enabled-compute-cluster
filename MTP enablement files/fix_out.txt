@@ -1,0 +1,30 @@
+Fixed gated_delta_net.cu if constexpr
+Pattern not found in mmq.cuh
+Searching for graph_optimize function...
+Found at 165593: ...          ggml_backend_event_synchronize(event);
+        };
+
+        CUDA_CHECK(cudaLaunchHostFunc(cuda_ctx->stream(), wait_fn, event));
+#endif
+        GGML_ABORT("fatal error");
+    }
+}
+
+static void ggml_backend_cuda_graph_optimize(ggml_backend_t backend, ggml_cgraph * cgraph) {
+    ggml_backend_cuda_context * cuda_ctx = (ggml_backend_cuda_context *) backend->context;
+
+#ifdef USE_CUDA_GRAPH
+    const void * graph_key = ggml_cud...
+---
+Found at 177261: ...ackend_cuda_graph_compute,
+    /* .event_record            = */ ggml_backend_cuda_event_record,
+    /* .event_wait              = */ ggml_backend_cuda_event_wait,
+    /* .graph_optimize          = */ ggml_backend_cuda_graph_optimize,
+};
+
+static ggml_guid_t ggml_backend_cuda_guid() {
+    static ggml_guid guid = { 0x2c, 0xdd, 0xe8, 0x1c, 0x65, 0xb3, 0x65, 0x73, 0x6a, 0x12, 0x88, 0x61, 0x1c, 0xc9, 0xdc, 0x25 };
+    return &guid;
+}
+...
+---

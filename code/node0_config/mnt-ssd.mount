@@ -1,0 +1,9 @@
+[Unit]
+Description=Mount node0 SSD (ext4) by label
+[Mount]
+What=LABEL=nano-ssd
+Where=/mnt/ssd
+Type=ext4
+Options=noatime
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,49 @@
+**The SD card hardware is fine** — `badblocks` found **0 bad blocks**. The corruption is **filesystem metadata only** (inode tables, block bitmaps, free counts).
+
+---
+
+### Can you scrub/repair it?
+
+**Technically yes, but not recommended for your use case:**
+
+| Option | Feasibility | Risk |
+|--------|-------------|------|
+| **`fsck -y` on unmounted root** | Requires booting from another SD/USB (can't repair mounted root) | Medium — may not fix all metadata corruption |
+| **`mkfs.ext4` (reformat)** | 100% fixes filesystem repair | **Destroys all data** — you'd lose the compiled binaries anyway |
+| **`dd` clone to new card** | Clones corruption | Propagates errors to new card |
+
+---
+
+### **Recommendation: Don't bother repairing.**
+
+| Factor | Assessment |
+|--------|------------|
+| **Time to repair** | 30–60 min (boot live media, fsck, verify) |
+| **Time to reflash fresh Qengineering image** | 10 min |
+| **Time to re-run Phases 4–8** | ~45 min (mostly unattended) |
+| **Risk of residual corruption** | Non-zero — metadata corruption often leaves subtle issues |
+| **Confidence in cloned fleet** | **Zero** if baseline has any corruption |
+
+---
+
+### **Do this instead (15 min total):**
+
+```bash
+# On Windows (Admin PowerShell):
+# 1. Flash fresh Qengineering Ubuntu 20.04 image to NEW SD card
+#    Rufus DD mode → Qengineering image → WRITE
+
+# 2. Boot Nano, SSH in, run Phases 4–8:
+#    Phase 4: apt update && apt install -y build-essential cmake git pkg-config libopenblas-dev liblapack-dev haveged nfs-common
+#    Phase 5: git clone + patches + cmake (proven recipe in work plan)
+#    Phase 6: nvpmodel -m 0, jetson_clocks, ufw, cluster-init.service
+#    Phase 7: llama-rpc.service (Groups=video,crypto, MemoryMax=3850M)
+#    Phase 8: rm ssh_host_*, truncate machine-id, journalctl --vacuum-time=1s, apt clean, history -c
+
+# 3. Create baseline image:
+#    dd if=\\.\PhysicalDriveX of=C:\Users\marti\Desktop\Jetson_Worker_Baseline.img bs=4M status=progress
+
+# 4. Flash to 11 cards → Phase 9a → 9b → 9c
+```
+
+**Total time: ~1.5 hours to a clean, verified Worker Baseline.** Zero risk of propagated corruption.

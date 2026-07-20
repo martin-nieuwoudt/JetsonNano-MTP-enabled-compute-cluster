@@ -1,0 +1,12 @@
+[INFER] exact command:
+  C:\llama.cpp-mtp\build\bin\llama-cli.exe -m C:\Models\Qwythos-9B-Claude-Mythos-5-1M-MTP-Q8_0.gguf -p test -n 64 -c 2048 --rpc 192.168.50.150:50052,192.168.50.151:50052,192.168.50.152:50052,192.168.50.153:50052,192.168.50.154:50052,192.168.50.155:50052,192.168.50.156:50052,192.168.50.157:50052,192.168.50.158:50052,192.168.50.159:50052,192.168.50.160:50052 --no-display-prompt --temp 0.8 --repeat-penalty 1.0 --tensor-split 1,1,1,1,1,1,1,1,1,1,1
+
+0.21.039.699 E Failed to connect to 192.168.50.150:50052
+0.42.082.715 E Failed to connect to 192.168.50.151:50052
+1.03.148.301 E Failed to connect to 192.168.50.152:50052
+1.24.202.775 E Failed to connect to 192.168.50.153:50052
+1.45.248.791 E Failed to connect to 192.168.50.154:50052
+2.06.291.602 E Failed to connect to 192.168.50.155:50052
+2.27.332.302 E Failed to connect to 192.168.50.156:50052
+2.48.374.663 E Failed to connect to 192.168.50.157:50052
+3.09.421.187 E Failed to connect to 192.168.50.158:50052

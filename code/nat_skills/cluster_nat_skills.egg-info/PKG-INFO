@@ -1,0 +1,6 @@
+Metadata-Version: 2.4
+Name: cluster-nat-skills
+Version: 0.1.0
+Summary: Shared NeMo Agent Toolkit skills library for the Jetson cluster + hermes agents
+Requires-Python: >=3.12
+Requires-Dist: nvidia-nat-mcp

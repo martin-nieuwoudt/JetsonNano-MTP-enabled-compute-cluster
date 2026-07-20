@@ -1,0 +1,38 @@
+===== Search for all vtables in ggml-cuda.cu =====
+672:static const ggml_backend_buffer_i ggml_backend_cuda_buffer_interface = {
+741:static const ggml_backend_buffer_type_i ggml_backend_cuda_buffer_type_interface = {
+984:static const ggml_backend_buffer_i ggml_backend_cuda_split_buffer_interface = {
+1058:static const ggml_backend_buffer_type_i ggml_backend_cuda_split_buffer_type_interface = {
+4246:static const ggml_backend_i ggml_backend_cuda_interface = {
+4929:static const ggml_backend_device_i ggml_backend_cuda_device_interface = {
+5047:static const ggml_backend_reg_i ggml_backend_cuda_reg_interface = {
+
+===== Check line 4258 area more carefully =====
+    /* .get_tensor_async        = */ ggml_backend_cuda_get_tensor_async,
+    /* .cpy_tensor_async        = */ ggml_backend_cuda_cpy_tensor_async,
+    /* .synchronize             = */ ggml_backend_cuda_synchronize,
+    /* .graph_plan_create       = */ NULL,
+    /* .graph_plan_free         = */ NULL,
+    /* .graph_plan_update       = */ NULL,
+    /* .graph_plan_compute      = */ NULL,
+    /* .graph_compute           = */ ggml_backend_cuda_graph_compute,
+    /* .event_record            = */ ggml_backend_cuda_event_record,
+    /* .event_wait              = */ ggml_backend_cuda_event_wait,
+    /* .graph_optimize          = */ ggml_backend_cuda_graph_optimize,
+};
+
+static ggml_guid_t ggml_backend_cuda_guid() {
+    static ggml_guid guid = { 0x2c, 0xdd, 0xe8, 0x1c, 0x65, 0xb3, 0x65, 0x73, 0x6a, 0x12, 0x88, 0x61, 0x1c, 0xc9, 0xdc, 0x25 };
+    return &guid;
+}
+
+bool ggml_backend_is_cuda(ggml_backend_t backend) {
+    return backend != NULL && ggml_guid_matches(backend->guid, ggml_backend_cuda_guid());
+}
+
+===== Check if there's a second backend interface =====
+2806:    if (!ggml_backend_is_cuda(backend_src) || !ggml_backend_is_cuda(backend_dst)) {
+3986:    if (ggml_backend_is_cuda(backend)) {
+4246:static const ggml_backend_i ggml_backend_cuda_interface = {
+4268:bool ggml_backend_is_cuda(ggml_backend_t backend) {
+5115:        /* .iface   = */ ggml_backend_cuda_interface,

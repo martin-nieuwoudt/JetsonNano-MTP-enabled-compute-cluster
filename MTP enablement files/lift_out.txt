@@ -1,0 +1,9 @@
+LIFTED=231  SKIPPED(MTP-only)=27
+== CMakeLists allreduce exclude present? ==
+  NO - need to add
+== CMakeLists CMAKE_CUDA_STANDARD 14 present? ==
+  NO - need to add
+== remaining if constexpr in tree ==
+3
+== remaining is_same_v in tree ==
+0

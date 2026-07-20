@@ -1,0 +1,5 @@
+598:static void ggml_backend_cuda_buffer_init_tensor(ggml_backend_buffer_t buffer, ggml_tensor * tensor) {
+643:static void ggml_backend_cuda_buffer_cpy_tensor(ggml_backend_buffer_t buffer, const ggml_tensor * src, ggml_tensor * dst) {
+675:    /* .init_tensor     = */ ggml_backend_cuda_buffer_init_tensor,
+679:    /* .cpy_tensor      = */ ggml_backend_cuda_buffer_cpy_tensor,
+4002:static void ggml_backend_cuda_graph_optimize(ggml_backend_t backend, ggml_backend_graph_plan_t graph_plan) {

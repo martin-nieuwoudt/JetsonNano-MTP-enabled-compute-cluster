@@ -1,0 +1,18 @@
+{
+  "_comment": "External tunables for the Jetson cluster inference coordinator. This file OVERRIDES the built-in defaults in cluster_config.py. If this file is missing or invalid, cluster_config.py falls back to its built-in defaults — the system never crashes. Edit values here; no need to touch Python. Sampling is load-time (applied on next model Load). context.ctx_size is load-time (server launched once with -c). output.max_tokens is per-request (re-read on every chat call; no restart needed).",
+  "sampling": {
+    "temp": 0.1,
+    "min_p": 0.05,
+    "top_p": 0.9,
+    "repeat_penalty": 1.1
+  },
+  "context": {
+    "ctx_size": 4096
+  },
+  "output": {
+    "max_tokens": 4096
+  },
+  "runtime": {
+    "request_timeout": null
+  }
+}
