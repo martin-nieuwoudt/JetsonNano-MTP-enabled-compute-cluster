@@ -215,21 +215,19 @@ def _kill_tree(pid):
 
 def cmd_stop(args):
     pid = _read_pid()
-    if not _is_alive(pid):
+    alive = _is_alive(pid)
+    if alive:
+        print(f"[SERVER] stopping pid {pid} — nanos will release their shards.",
+              file=sys.stderr)
+        _kill_tree(pid)
+    else:
         print("[SERVER] not running (or pid file stale).")
-        try:
-            os.remove(SERVER_PID_FILE)
-        except OSError:
-            pass
-        return 0
-    print(f"[SERVER] stopping pid {pid} — nanos will release their shards.",
-          file=sys.stderr)
-    _kill_tree(pid)
     try:
         os.remove(SERVER_PID_FILE)
     except OSError:
         pass
-    print("[SERVER] stopped. Shards freed.", file=sys.stderr)
+    if alive:
+        print("[SERVER] stopped. Shards freed.", file=sys.stderr)
     return 0
 
 

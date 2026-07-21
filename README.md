@@ -14,46 +14,46 @@ Start here — these are the authoritative instructions:
 
 | Document | Purpose |
 |----------|---------|
-| [`Nano Work Plan.md`](Nano%20Work%20Plan.md) | **Primary build manual.** Phase-by-phase from SD-card flash to live 11-node inference. Single source of truth for architecture and procedures. |
-| [`MTP CUDA Enablement Work Plan.md`](MTP%20CUDA%20Enablement%20Work%20Plan.md) | The CUDA 10.2 / C++14 port of the MTP source tree that lets the Nano serve MTP models. |
-| [`MTP_CUDA_STATUS.md`](MTP_CUDA_STATUS.md) | Live status & continuation doc for the MTP CUDA port. |
+| [`Nano Work Plan_Instructions.md`](Nano%20Work%20Plan_Instructions.md) | **Primary build manual.** Phase-by-phase from SD-card flash to live 11-node inference. Single source of truth for architecture and procedures. |
+| [`MTP CUDA Enablement Work Plan.md`](Docs/MTP%20CUDA%20Enablement%20Work%20Plan.md) | The CUDA 10.2 / C++14 port of the MTP source tree that lets the Nano serve MTP models. |
+| [`MTP_CUDA_STATUS.md`](Docs/MTP_CUDA_STATUS.md) | Live status & continuation doc for the MTP CUDA port. |
 | [`Docs/`](Docs/) | Reference material, design notes, and status history. |
 
 ## Repository layout
 
 ```
-code/                  Canonical orchestration scripts (dashboard, MCP server, deploy, QoS)
-code/mcp/              FastMCP server (RPC + Tier1 + Tier2 + model registry + power) + single-source-of-truth config
-code/methods/          Simulation-method library (Phase 1 research tooling)
-Docs/                  Instruction + reference docs
-MTP enablement files/  MTP CUDA port helpers, logs, and the 27 MTP-only file inventory
-Nano Work Plan.md      ← the bible
+code/                     Canonical orchestration scripts (dashboard, MCP server, deploy, QoS)
+code/mcp/                 FastMCP server + single-source-of-truth config (RPC + Tier1 + Tier2 + model registry + power)
+code/mcp/workers/         PyCUDA workers (GEMM, embedding, MoE ring) — SCP-pushed to Jetsons at runtime
+code/pc_build/            PC build scripts (CPU+RPC, CUDA variants, nvcc tests)
+code/methods/             Simulation-method library
+ClusterVerify/            Cluster onboarding, verification, and diagnostics scripts
+Docs/                     Instruction & reference docs (MTP work plan, MTP status)
+MTP enablement files/     MTP CUDA port helpers, logs, and the 27 MTP-only file inventory
+llamita_ref/              llamita.cpp upstream reference (CUDA 10.2 / 1-bit Bonsai)
+mtp_pc_src/              MTP PC coordinator source — snapshot of C:\llama.cpp-mtp (commit 20a04b2, tag b9886) with the RPC buffer-probe patch applied
 ```
 
 ## Quick start
 
-1. Read [`Nano Work Plan.md`](Nano%20Work%20Plan.md) end-to-end. It defines
-   `CLUSTER_ROOT` (your working copy of this repo) and every changeable fact
-   (node IPs, ports, model registry) lives in `code/mcp/cluster_config.py`.
+1. Read [`Nano Work Plan_Instructions.md`](Nano%20Work%20Plan_Instructions.md) end-to-end.
+   It defines `CLUSTER_ROOT` (your working copy of this repo) and every changeable
+   fact (node IPs, ports, model registry) lives in `code/mcp/cluster_config.py`.
 2. Flash + bootstrap the nodes per Phases 1–9.
-3. Build the MTP CUDA worker (see `MTP CUDA Enablement Work Plan.md`).
-4. Launch the dashboard:
+3. Build the PC coordinator: `C:\llama.cpp-mtp` (see Appendix B of the work plan).
+   The PC is a CPU-only RPC client — CUDA compute runs on the Nanos only.
+4. Build the MTP CUDA worker on node0 (see `MTP CUDA Enablement Work Plan.md`).
+5. Launch the dashboard:
    ```
    C:\Python314\pythonw.exe code\cluster_telemetry.py web
    ```
    then open http://localhost:9090.
 
-## The MTP PC build tree is a submodule
-
-`mtp_pc_src/` is a **separate upstream llama.cpp fork** and is tracked as a git
-submodule, not committed inline. After creating a GitHub remote for the fork,
-wire it up with:
-
-```powershell
-git submodule add <your-fork-url> mtp_pc_src
-```
-
-Until then it is excluded via `.gitignore`.
+> **Note:** `mtp_pc_src/` in this repository is a **snapshot** of the PC
+> coordinator source tree at `C:\llama.cpp-mtp` (commit `20a04b2`, tag `b9886`).
+> It exists so a person reading the repo remote can see what the PC tree looked
+> like, including the one local patch in `src/llama-model-loader.cpp`. The live
+> build happens from `C:\llama.cpp-mtp` on the Master PC, not from this snapshot.
 
 ## License
 

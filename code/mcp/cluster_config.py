@@ -26,7 +26,7 @@ NODE_NAMES = [f"nano{i:02d}" for i in range(11)]                 # nano00..nano1
 # Fixed private-LAN address of the golden node0 template. This is a static
 # cluster topology constant on a trusted LAN, not user-supplied input.
 # nosec B104: hardcoded IP is intentional and safe here.
-NODE0_IP = "192.168.50.150"
+NODE0_IP = "192.168.50.150"  # NOSONAR
 SHARD_COUNT = len(NODE_IPS)                                      # 11
 
 # ---------------------------------------------------------------------------
@@ -130,6 +130,39 @@ _SETTINGS_FALLBACK = {
 }
 
 
+def _read_json_file(path):
+    """Read and parse a JSON file, returning {} on any failure."""
+    import json as _json
+    try:
+        with open(path, "r", encoding="utf-8") as _fh:
+            return _json.load(_fh) or {}
+    except Exception:
+        return {}
+
+
+def _coerce_value(raw_value, default_value):
+    """Coerce raw_value to the type of default_value, or return default on failure.
+
+    A default_value of None means 'no limit' — accept a number or None only.
+    """
+    if default_value is None:
+        # None means "no limit" (e.g. request_timeout). Accept a number
+        # or null; anything else falls back to None.
+        return raw_value if isinstance(raw_value, (int, float)) and not isinstance(raw_value, bool) else None
+    try:
+        return type(default_value)(raw_value)
+    except (TypeError, ValueError):
+        return default_value
+
+
+def _clamp_settings_bounds(merged):
+    """Clamp merged settings to safe runtime bounds (mutates in-place)."""
+    merged["context"]["ctx_size"] = max(512, int(merged["context"]["ctx_size"]))
+    merged["output"]["max_tokens"] = max(1, int(merged["output"]["max_tokens"]))
+    for _k in ("temp", "min_p", "top_p", "repeat_penalty"):
+        merged["sampling"][_k] = float(merged["sampling"][_k])
+
+
 def _load_settings():
     """Load cluster_settings.json as an override layer over _SETTINGS_FALLBACK.
 
@@ -137,37 +170,17 @@ def _load_settings():
     default. A missing or corrupt file is NOT fatal — we run on defaults.
     Values are clamped to sane bounds so a typo cannot break the runtime.
     """
-    import json as _json
     path = os.path.join(os.path.dirname(os.path.abspath(__file__)),
                         "cluster_settings.json")
-    data = {}
-    try:
-        with open(path, "r", encoding="utf-8") as _fh:
-            data = _json.load(_fh) or {}
-    except Exception:
-        data = {}
+    data = _read_json_file(path)
     merged = {}
     for _section, _defaults in _SETTINGS_FALLBACK.items():
         _raw = data.get(_section, {}) or {}
         _out = {}
         for _k, _def in _defaults.items():
-            _v = _raw.get(_k, _def)
-            if _def is None:
-                # None means "no limit" (e.g. request_timeout). Accept a number
-                # or null; anything else falls back to None.
-                _v = _v if isinstance(_v, (int, float)) and not isinstance(_v, bool) else None
-            else:
-                try:
-                    _v = type(_def)(_v)
-                except (TypeError, ValueError):
-                    _v = _def
-            _out[_k] = _v
+            _out[_k] = _coerce_value(_raw.get(_k, _def), _def)
         merged[_section] = _out
-    # Clamp to safe bounds (prevents a bad value from crashing the server).
-    merged["context"]["ctx_size"] = max(512, int(merged["context"]["ctx_size"]))
-    merged["output"]["max_tokens"] = max(1, int(merged["output"]["max_tokens"]))
-    for _k in ("temp", "min_p", "top_p", "repeat_penalty"):
-        merged["sampling"][_k] = float(merged["sampling"][_k])
+    _clamp_settings_bounds(merged)
     return merged
 
 
@@ -563,7 +576,7 @@ def partition_ensemble(models):
     clobber shards). node0 is included in the pool.
     """
     remaining = list(NODE_IPS)                        # node0 INCLUDED
-    rng = _Random(NODE_SELECTION_SEED)
+    rng = _Random(NODE_SELECTION_SEED)                # fixed-seed RNG for reproducible ensemble partitioning
     ports = list(SERVER_PORT_POOL)
     if len(models) > len(ports):
         raise ValueError(

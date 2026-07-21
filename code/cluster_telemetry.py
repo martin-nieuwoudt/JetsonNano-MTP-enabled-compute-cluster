@@ -75,7 +75,7 @@ except Exception as _cfg_err:  # pragma: no cover
           file=sys.stderr)
     PORT = 50052
     JETSON_IPS = [f"192.168.50.{i}" for i in range(150, 161)]
-    NODE0_IP = "192.168.50.150"
+    NODE0_IP = "192.168.50.150"  # NOSONAR
     SSH_USER = "jetson"
     SSH_KEY_PATH = r"C:\Users\marti\.ssh\id_ed25519"
     MIN_REQUIRED_RAM_GB = 3.5
@@ -385,6 +385,26 @@ def _coerce_sampling(raw):
     }
 
 
+def _kill_port_owner(port):
+    """Kill any process listening on (127.0.0.1, port). Idempotent."""
+    import subprocess as _sp
+    if sys.platform != "win32":
+        return
+    try:
+        out = _sp.check_output(
+            ["netstat", "-ano"], text=True, timeout=5,
+            stderr=_sp.DEVNULL,
+        )
+        for line in out.splitlines():
+            if f"127.0.0.1:{port}" in line and "LISTENING" in line:
+                pid = line.strip().split()[-1]
+                if pid.isdigit():
+                    _sp.run(["taskkill", "/F", "/PID", pid],
+                            stdout=_sp.DEVNULL, stderr=_sp.DEVNULL, timeout=5)
+    except Exception:
+        pass
+
+
 def _server_status():
     """Report resident-model state for the dashboard.
 
@@ -492,11 +512,18 @@ def _save_upload(filename, b64data):
             "size": len(raw), "is_text": _looks_text(raw), "preview": preview}
 
 
+def _strip_think(text):
+    """Remove <think>...</think> reasoning blocks from model output so the
+    dashboard shows only the final answer (raw think tags are not useful in chat)."""
+    import re as _re
+    return _re.sub(r"<think>.*?</think>", "", text, flags=_re.DOTALL).strip()
+
+
 def _chat_completion(prompt, n_predict=None, system_prompt="", sampling=None):
-    """Send a prompt to the persistent llama-server (loaded once, resident).
-    Fast HTTP call — no CLI reload per prompt. Sampling is taken from the
-    resident-model state (set at load time via the dashboard controls) so the
-    UI parameters take effect; falls back to the config defaults if none stored.
+    """Send a prompt to the persistent llama-server via the /v1/chat/completions
+    endpoint so the GGUF's embedded chat template is applied (identity, reasoning
+    markers, etc.). The old /completion path bypassed the template and returned
+    raw model output with incorrect identity.
     """
     import urllib.request as _ureq
     s = sampling or {
@@ -504,31 +531,34 @@ def _chat_completion(prompt, n_predict=None, system_prompt="", sampling=None):
         "top_p": SAMPLING_TOP_P, "repeat_penalty": SAMPLING_REPEAT_PENALTY,
     }
     if n_predict is None:
-        n_predict = MAX_TOKENS_DEFAULT   # re-read from settings each call
+        n_predict = MAX_TOKENS_DEFAULT
+    messages = []
+    if system_prompt:
+        messages.append({"role": "system", "content": system_prompt})
+    messages.append({"role": "user", "content": prompt})
     payload = json.dumps({
-        "prompt": prompt,
-        "n_predict": n_predict,
+        "messages": messages,
+        "max_tokens": n_predict,
         "temperature": s["temp"],
         "min_p": s["min_p"],
         "top_p": s["top_p"],
         "repeat_penalty": s["repeat_penalty"],
-        "cache_prompt": True,
+        "cache_prompt": False,
+        "stream": False,
     })
-    if system_prompt:
-        payload_obj = json.loads(payload)
-        payload_obj["system_prompt"] = system_prompt
-        payload = json.dumps(payload_obj)
     req = _ureq.Request(
-        f"http://127.0.0.1:{_RESIDENT_PORT}/completion",
+        f"http://127.0.0.1:{_RESIDENT_PORT}/v1/chat/completions",
         data=payload.encode("utf-8"),
         headers={"Content-Type": "application/json"})
     try:
         with _ureq.urlopen(req, timeout=REQUEST_TIMEOUT) as r:
             data = json.loads(r.read().decode("utf-8"))
-        return {"content": data.get("content", ""),
-                "timings": data.get("timings", {})}
+        content = (data.get("choices", [{}])[0]
+                   .get("message", {}).get("content", ""))
+        return {"content": _strip_think(content),
+                "timings": data.get("usage", {})}
     except Exception as e:
-        raise RuntimeError(f"llama-server completion failed: {e}")
+        raise RuntimeError(f"llama-server chat completion failed: {e}")
 
 
 def _ensemble_complete(port, prompt, system_prompt=""):
@@ -567,7 +597,7 @@ def _ensemble_complete(port, prompt, system_prompt=""):
         if content:
             break
         time.sleep(1.0)  # brief pause before retry (warmup race)
-    return content, tps
+    return _strip_think(content), tps
 
 
 def _read_ensemble_state():
@@ -1280,7 +1310,6 @@ setInterval(refreshSamplingStatus, 5000);
 # Background-refreshed cache so the HTTP endpoint never blocks on 11 SSH calls.
 _STATE_CACHE = {"state": None, "updated": 0.0}
 _STATE_LOCK = __import__("threading").Lock()
-JSON_CT = "application/json"
 
 # Resident-model state for the dashboard's single-mode chat. The dashboard uses
 # the SAME MTP llama-cli + all-11-RPC-worker path the CLI backend uses, so the
@@ -1313,6 +1342,41 @@ def _state_refresher(interval=2.0):
         except Exception:
             pass
         time.sleep(interval)
+
+
+def _build_server_cmd(model, ctx, sampling, rpc_str, resident_cli, resident_port):
+    """Build the llama-server CLI argument list (pure, no side effects)."""
+    srv_bin = os.path.join(os.path.dirname(resident_cli), "llama-server.exe")
+    return [
+        srv_bin,
+        "-m", model,
+        "--rpc", rpc_str,
+        "--host", "127.0.0.1",
+        "--port", str(resident_port),
+        "-c", str(ctx),
+        "--no-warmup",
+        "-ngl", "0",
+        "--temp", str(sampling["temp"]),
+        "--min-p", str(sampling["min_p"]),
+        "--top-p", str(sampling["top_p"]),
+        "--repeat-penalty", str(sampling["repeat_penalty"]),
+    ]
+
+
+def _poll_server_health(resident_port, proc, deadline):
+    """Poll /health until ready, exited, or deadline. Returns (ok, msg)."""
+    import urllib.request as _ureq
+    while time.time() < deadline:
+        if proc.poll() is not None:
+            return False, "server exited early"
+        try:
+            with _ureq.urlopen(f"http://127.0.0.1:{resident_port}/health",
+                               timeout=2) as r:
+                if r.status == 200:
+                    return True, "resident"
+        except Exception:
+            time.sleep(2)
+    return False, "timed out waiting for server"
 
 
 def _get_cached_state():
@@ -1424,7 +1488,9 @@ class _Handler(BaseHTTPRequestHandler):
         # Launch persistent llama-server ONCE, then serve all chats via HTTP.
         # This avoids the 2-3 min CLI reload on every prompt.
         with _RESIDENT_LOCK:
-            global _RESIDENT_MODEL, _RESIDENT_CTX, _RESIDENT_PROC, _RESIDENT_PORT
+            global _RESIDENT_MODEL, _RESIDENT_CTX, _RESIDENT_PROC, _RESIDENT_PORT, _RESIDENT_SAMPLING
+            # Kill any known process AND any stale process squatting on the port
+            # (e.g. from a dashboard restart where _RESIDENT_PROC was None).
             if _RESIDENT_PROC is not None:
                 try:
                     _RESIDENT_PROC.kill()
@@ -1433,21 +1499,14 @@ class _Handler(BaseHTTPRequestHandler):
                     pass
                 _RESIDENT_PROC = None
             _RESIDENT_PORT = 8080
-            srv_bin = os.path.join(os.path.dirname(RESIDENT_CLI), "llama-server.exe")
-            cmd = [
-                srv_bin,
-                "-m", model,
-                "--rpc", rpc_list(),
-                "--host", "127.0.0.1",
-                "--port", str(_RESIDENT_PORT),
-                "-c", str(ctx),
-                "--no-warmup",
-                "-ngl", "0",
-                "--temp", str(sampling["temp"]),
-                "--min-p", str(sampling["min_p"]),
-                "--top-p", str(sampling["top_p"]),
-                "--repeat-penalty", str(sampling["repeat_penalty"]),
-            ]
+            _kill_port_owner(_RESIDENT_PORT)
+            time.sleep(0.5)  # let the OS release the port
+            if _probe_port(_RESIDENT_PORT, host="127.0.0.1"):
+                return json.dumps({"ok": False,
+                    "msg": "Port 8080 still in use by a stale process. "
+                           "Eject and try Load again."}).encode("utf-8")
+            cmd = _build_server_cmd(model, ctx, sampling, rpc_list(),
+                                    RESIDENT_CLI, _RESIDENT_PORT)
             env = os.environ.copy()
             env["PATH"] = os.path.dirname(RESIDENT_CLI) + os.pathsep + env.get("PATH", "")
             flags = _sp.CREATE_NO_WINDOW if sys.platform == "win32" else 0
@@ -1455,25 +1514,14 @@ class _Handler(BaseHTTPRequestHandler):
                                     "cluster_server.log"), "w", encoding="utf-8")
             _RESIDENT_PROC = _sp.Popen(cmd, stdout=log, stderr=log,
                                        env=env, creationflags=flags)
-            import urllib.request as _ureq
-            deadline = time.time() + 300
-            while time.time() < deadline:
-                if _RESIDENT_PROC.poll() is not None:
-                    return json.dumps({"ok": False,
-                                       "msg": "server exited early"}).encode("utf-8")
-                try:
-                    with _ureq.urlopen(f"http://127.0.0.1:{_RESIDENT_PORT}/health",
-                                       timeout=2) as r:
-                        if r.status == 200:
-                            _RESIDENT_MODEL = model
-                            _RESIDENT_CTX = ctx
-                            _RESIDENT_SAMPLING = sampling
-                            return json.dumps({"ok": True,
-                                               "msg": "resident"}).encode("utf-8")
-                except Exception:
-                    time.sleep(2)
-            return json.dumps({"ok": False,
-                               "msg": "timed out waiting for server"}).encode("utf-8")
+            ok, msg = _poll_server_health(_RESIDENT_PORT, _RESIDENT_PROC,
+                                          time.time() + 300)
+            if ok:
+                _RESIDENT_MODEL = model
+                _RESIDENT_CTX = ctx
+                _RESIDENT_SAMPLING = sampling
+                return json.dumps({"ok": True, "msg": "resident"}).encode("utf-8")
+            return json.dumps({"ok": False, "msg": msg}).encode("utf-8")
 
     def _post_server_eject(self):
         with _RESIDENT_LOCK:

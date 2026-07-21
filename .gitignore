@@ -53,3 +53,4 @@ ventoy-1.1.16-windows/
 
 # ── OS / launcher shortcuts in repo root ───────────────────────────
 *.lnk
+.opencode
