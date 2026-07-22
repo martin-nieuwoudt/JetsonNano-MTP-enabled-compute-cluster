@@ -28,9 +28,12 @@ comma-separated list of ``host:port`` strings, e.g.::
 
     --rpc 192.168.1.101:50052,192.168.1.102:50052,...
 
-The local master PC is *CPU-only*; therefore ``-ngl 0`` (zero GPU layers on
-the local side) combined with the remote RPC endpoints offloads all GPU work
-to the Nano cluster.
+The local master PC is *CPU-only*.  The ``-ngl`` flag is set to
+:data:`~shared.config.N_GPU_LAYERS_ALL` (``99``), which tells llama.cpp to
+offload that many transformer layers to GPU via the RPC endpoints.  Because
+the master has no local GPU, all layers are routed to the Jetson Nano nodes
+over the RPC connection — effectively offloading *all* GPU computation to the
+Nano cluster.
 """
 
 from __future__ import annotations

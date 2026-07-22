@@ -48,6 +48,10 @@ class PyCUDAWorker:
         """Initialise the PyCUDA driver and create a CUDA context."""
         try:
             import pycuda.driver as cuda  # noqa: PLC0415
+            # pycuda.autoinit is imported for its side effect: it automatically
+            # initialises the CUDA driver and creates a default device context.
+            # This removes the need for explicit cuda.init() + cuda.Device(0).make_context()
+            # calls.  The import appears unused but is essential.
             import pycuda.autoinit  # noqa: PLC0415, F401
 
             self._ctx = cuda.Context.get_current()

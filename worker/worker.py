@@ -47,7 +47,7 @@ from typing import Optional
 
 from shared.config import (
     LLAMACPP_RPC_PORT,
-    MASTER_HOST,
+    MASTER_CONNECT_DEFAULT,
     MASTER_PORT,
     PYCUDA_TASK_PORT,
     SOCKET_TIMEOUT,
@@ -92,7 +92,7 @@ class Worker:
 
     def __init__(
         self,
-        master_host: str = MASTER_HOST,
+        master_host: str = MASTER_CONNECT_DEFAULT,
         master_port: int = MASTER_PORT,
         node_id: Optional[str] = None,
         worker_port: int = WORKER_PORT,
@@ -338,7 +338,7 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="Jetson Nano cluster worker")
     parser.add_argument(
         "--master-host",
-        default=os.environ.get("MASTER_HOST", "192.168.1.1"),
+        default=os.environ.get("MASTER_HOST", MASTER_CONNECT_DEFAULT),
         help="Master coordinator IP/hostname",
     )
     parser.add_argument(

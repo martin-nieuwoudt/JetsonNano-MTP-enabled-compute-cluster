@@ -1,6 +1,10 @@
 """
 Shared configuration constants for the Jetson Nano MTP-enabled compute cluster.
 
+MTP (Multi-Tensor Parallelism) refers to the cluster's ability to split large
+model tensors and GPU workloads across multiple Jetson Nano nodes, enabling
+models and compute jobs that exceed the memory or throughput of a single Nano.
+
 Topology: star — one Windows Master PC (hub) coordinating 11 Jetson Nano workers
           (leaves) over a 1 Gbps Ethernet network.
 """
@@ -14,7 +18,13 @@ NETWORK_BANDWIDTH_GBPS = 1       # Inter-node bandwidth
 # ---------------------------------------------------------------------------
 # Master coordinator
 # ---------------------------------------------------------------------------
-MASTER_HOST = "0.0.0.0"          # Bind address for the master coordinator
+# Bind address for the master coordinator's listening socket.
+# "0.0.0.0" means all local interfaces — required so every Nano on the
+# cluster VLAN can reach the coordinator.
+MASTER_HOST = "0.0.0.0"
+# Default IP that workers use when connecting *to* the master.
+# Overridden via --master-host CLI flag or MASTER_HOST env var on each Nano.
+MASTER_CONNECT_DEFAULT = "192.168.1.1"
 MASTER_PORT = 7000               # TCP port the master listens on for worker registration
 MASTER_API_PORT = 7001           # REST/HTTP port for external task submission
 

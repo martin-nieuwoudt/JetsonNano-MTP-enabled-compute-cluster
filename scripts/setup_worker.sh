@@ -67,11 +67,11 @@ fi
 cd "$LLAMA_DIR"
 sudo git pull --ff-only
 
-# Detect CUDA architecture for Jetson Nano (Maxwell, compute 5.3)
+# Jetson Nano uses the Maxwell GPU (compute capability 5.3).
+# This architecture is fixed for all Nano models and is not auto-detected.
 CUDA_ARCH="53"
 if command -v nvcc &>/dev/null; then
-    DETECTED=$(nvcc --version | grep -oP 'V\K[0-9]+\.[0-9]+' | head -1 || true)
-    echo "  CUDA version: ${DETECTED:-unknown}"
+    echo "  CUDA version: $(nvcc --version | grep -oP 'release \K[0-9.]+' | head -1)"
 fi
 
 sudo cmake -B build \
