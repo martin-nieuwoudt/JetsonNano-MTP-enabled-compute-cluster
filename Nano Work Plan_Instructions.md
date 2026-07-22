@@ -19,7 +19,7 @@
 | PyCUDA 2021.1 | ARM64 | `python3 -m pip install --user pycuda==2021.1` (CUDA 10.2, Python 3.8) |
 
 > **Dependency notes:** Azure IoT Edge Runtime, NVIDIA NeMo Framework, and NVIDIA Jetson Device Skills are excluded — not required for RPC inference. SocketXP IoT Agent is included for out-of-band reverse-tunnel SSH. The telemetry stack (Datadog / Telegraf + Mosquitto/ZeroMQ) is scripted in `code/phase11_monitoring.sh` as commented install blocks. **PyCUDA 2021.1** (CUDA 10.2 / Python 3.8) supports the Tier 1/2 distributed-compute workers, and a **FastMCP orchestration server** (`code/mcp/`) exposes RPC + Tier 1 (GEMM/embedding) + Tier 2 (MoE ring) + model-registry + simulation-method tools to the IDE agents (see the dedicated section below).
-> **Two llama.cpp trees:** the **PC coordinator** (`C:\llama.cpp-mtp`) and the **node0 fleet tree** (`/home/jetson/llama.cpp-mtp`) are both the MTP build (`b9886`/`20a04b2`). The PC tree is a clean upstream checkout + one RPC-loader patch (`src/llama-model-loader.cpp`, enables `qwen35` MTP loading); the C++17→C++14 / CUDA 10.2 port lives only on the node0 tree. The old `b56f079e2` stable tree (`C:\llama.cpp`) is retained as a reference but is **not** used by the live fleet.
+> **Two llama.cpp trees:** the **PC coordinator** (`C:\llama.cpp-mtp`) and the **node0 fleet tree** (`/home/jetson/llama.cpp-mtp`) are both the MTP build (`b9886`/`20a04b2`). The PC tree is a clean upstream checkout + one RPC buffer-probe shortcut patch (`src/llama-model-loader.cpp`, avoids hundreds of blocking RPC round-trips during model load); the C++17→C++14 / CUDA 10.2 port lives on the fleet tree (node0's `/home/jetson/llama.cpp-mtp`, cloned to all 11 boards); the PC coordinator tree (`C:\llama.cpp-mtp`) does NOT contain the port — it builds CPU-only with just the 15-line RPC buffer-probe patch. The old `b56f079e2` stable tree (`C:\llama.cpp`) is retained as a reference but is **not** used by the live fleet.
 
 ## Execution Summary
 
@@ -65,7 +65,7 @@
 ### Network
 - [x] DHCP reservation range `192.168.50.150`-`192.168.50.160`
 - [x] Master PC static IP/DHCP reservation on same subnet
-- [ ] MAC addresses recorded and labeled per board
+- [X] MAC addresses recorded and labeled per board
 
 ### Software & Tools
 - [x] Qengineering image downloaded & verified (SHA256)
@@ -135,7 +135,7 @@
 - **CRITICAL:** Build from the **SAME commit as the Nano** (`b9886`/`20a04b2` for the MTP fleet). The RPC wire protocol changes between commits, so client and server MUST match exactly or the connection fails. The live fleet uses the **MTP build** (`C:\llama.cpp-mtp`), not the old `b56f079e2` stable tree.
 - Clone: `git clone https://github.com/ggml-org/llama.cpp.git C:\llama.cpp-mtp`
 - Checkout: `cd C:\llama.cpp-mtp && git checkout 20a04b2`
-- **One source patch required (RPC performance):** `src/llama-model-loader.cpp` — in `weight_buft_supported()` (near line 907), add an early-return shortcut for `GGML_BACKEND_BUFT_NAME_RPC`: `ggml_backend_rpc_device_supports_op()` unconditionally returns `true` and never inspects the probe buffer. Without this shortcut, every weight tensor in a multi-hundred-tensor model triggers a synchronous `RPC_CMD_ALLOC_BUFFER` + `RPC_CMD_BUFFER_FREE` round-trip — hundreds of blocking network round-trips before a single weight byte is uploaded. The shortcut is behavior-neutral (RPC always reports "supported") and avoids the dominant cause of client-side aborts on larger models. This is the ONLY local modification on the PC tree; the C++17→C++14 / CUDA 10.2 port lives on the node0 tree (see `MTP CUDA Enablement Work Plan.md`).
+- **One source patch required (RPC performance):** `src/llama-model-loader.cpp` — in `weight_buft_supported()` (near line 907), add an early-return shortcut for `GGML_BACKEND_BUFT_NAME_RPC`: `ggml_backend_rpc_device_supports_op()` unconditionally returns `true` and never inspects the probe buffer. Without this shortcut, every weight tensor in a multi-hundred-tensor model triggers a synchronous `RPC_CMD_ALLOC_BUFFER` + `RPC_CMD_BUFFER_FREE` round-trip — hundreds of blocking network round-trips before a single weight byte is uploaded. The shortcut is behavior-neutral (RPC always reports "supported") and avoids the dominant cause of client-side aborts on larger models. This is the ONLY local modification on the PC tree; the C++17→C++14 / CUDA 10.2 port lives on the fleet tree (node0's `/home/jetson/llama.cpp-mtp`, cloned to all 11 boards) — see `MTP CUDA Enablement Work Plan.md`.
 - Activate x64 MSVC: `call "C:\Program Files (x86)\Microsoft Visual Studio\18\BuildTools\VC\Auxiliary\Build\vcvarsall.bat" x64` (or `VsDevCmd.bat -vcvars_ver=14.44 -arch=x64`)
 - **CMake (CPU-only + RPC):**
   ```
@@ -905,7 +905,7 @@ This shows the PC client has no local compute fallback — the Maxwell GPU on th
 | **Pinned commit** | `20a04b2` (tag `b9886`, "ggml-cpu: use UE4M3 LUT in ARM NVFP4 dot product") |
 | **Git state** | Grafted (shallow clone), HEAD == `b9886` |
 | **Local modification** | **Exactly 1 file** — `src/llama-model-loader.cpp` (+15 lines, RPC buffer-probe shortcut) |
-| **C++17→C++14 / CUDA 10.2 port** | **Does NOT exist on the PC tree.** Lives on the node0 fleet tree `/home/jetson/llama.cpp-mtp` and documented in `MTP CUDA Enablement Work Plan.md`. |
+| **C++17→C++14 / CUDA 10.2 port** | **Does NOT exist on the PC tree.** Lives on the node0 fleet tree `/home/jetson/llama.cpp-mtp` (captured as golden image, cloned to all 11 boards) and documented in `MTP CUDA Enablement Work Plan.md`. |
 | **Why not upstream HEAD** | RPC wire protocol changes between commits. Client (PC) and server (Nano) must match exactly or all connections fail. |
 
 ### B.1 Authoritative Version Manifest (PC — verified from CMakeCache.txt)

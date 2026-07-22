@@ -17,9 +17,20 @@ Thumbs.db
 *.out
 *.err
 *.pid
+hs_err_pid*.log
+replay_pid*.log
 rpc_metrics.json
 cluster_state.json
 chat_uploads/
+
+# ── Project scratch & build artifacts (not project source) ────────
+mtp_node_src.tgz
+*.tgz
+*.tar.gz
+*.docx
+C++/
+MTP enablement files/
+ClusterVerify/
 
 # ── Secrets / credentials (NEVER commit) ───────────────────────────
 *.pem

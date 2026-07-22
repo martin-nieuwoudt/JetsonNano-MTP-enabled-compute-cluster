@@ -945,7 +945,25 @@ async function refresh(){
     const r = await fetch('/api/state');
     const s = await r.json();
     if (!s || !s.cluster) { setTimeout(refresh, 1000); return; }
-    document.getElementById('ts').textContent = 'updated ' + new Date().toLocaleTimeString();
+    // Pull the server-side cache age so the UI can warn when the refresher
+    // thread is hung (the only way the dashboard ever shows stale data).
+    let serverAge = null;
+    try {
+      const lr = await fetch('/api/last_refresh');
+      const lj = await lr.json();
+      serverAge = lj.age_s;
+    } catch (e) { /* tolerate transient /api/last_refresh failures */ }
+    const tsEl = document.getElementById('ts');
+    if (serverAge !== null && serverAge > 10) {
+      // Refresher thread is hung or extremely slow. Surface this prominently
+      // so the user does not mistake a frozen all-FAIL snapshot for live data.
+      tsEl.textContent = 'STALE: server cache is ' + Math.round(serverAge)
+        + 's old (refresher hung) \u2014 updated ' + new Date().toLocaleTimeString();
+      tsEl.style.color = '#ff6b6b';
+    } else {
+      tsEl.textContent = 'updated ' + new Date().toLocaleTimeString();
+      tsEl.style.color = '';
+    }
     const c = s.cluster;
     const banner = document.getElementById('banner');
     if (c.healthy) { banner.className='banner ok'; banner.textContent='\u25CF CLUSTER HEALTHY'; }
@@ -1332,15 +1350,22 @@ _RESIDENT_SAMPLING = {
 
 
 def _state_refresher(interval=2.0):
-    """Continuously refresh _STATE_CACHE in a daemon thread."""
+    """Continuously refresh _STATE_CACHE in a daemon thread.
+
+    Errors are logged to stderr (NOT silently swallowed) so a stuck SSH session
+    or any other failure surfaces in the launcher's console. The cache is also
+    timestamped so the UI can detect and warn about staleness when this thread
+    is hung.
+    """
     while True:
         try:
             snap = collect_state()
             with _STATE_LOCK:
                 _STATE_CACHE["state"] = snap
                 _STATE_CACHE["updated"] = time.time()
-        except Exception:
-            pass
+        except Exception as e:
+            print(f"[TELEMETRY] refresher error: {type(e).__name__}: {e}",
+                  file=sys.stderr)
         time.sleep(interval)
 
 
@@ -1388,6 +1413,23 @@ class _Handler(BaseHTTPRequestHandler):
     def do_GET(self):
         if self.path == "/api/state":
             body = json.dumps(_get_cached_state() or {}).encode("utf-8")
+            self.send_response(200)
+            self.send_header("Content-Type", JSON_CT)
+            self.send_header("Access-Control-Allow-Origin", "*")
+            self.end_headers()
+            self.wfile.write(body)
+        elif self.path == "/api/last_refresh":
+            # Expose the cache timestamp so the UI can warn when the refresher
+            # thread is hung. Returns {"updated": <unix-ts>, "age_s": <float>}.
+            # age_s is None when the cache has never been populated.
+            with _STATE_LOCK:
+                updated = _STATE_CACHE["updated"]
+            now = time.time()
+            age_s = (now - updated) if updated > 0 else None
+            body = json.dumps({
+                "updated": updated,
+                "age_s": round(age_s, 2) if age_s is not None else None,
+            }).encode("utf-8")
             self.send_response(200)
             self.send_header("Content-Type", JSON_CT)
             self.send_header("Access-Control-Allow-Origin", "*")
