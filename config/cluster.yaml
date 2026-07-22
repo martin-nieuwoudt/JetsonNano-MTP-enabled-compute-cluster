@@ -1,0 +1,96 @@
+# Jetson Nano MTP-enabled Compute Cluster — Cluster Configuration
+#
+# Topology: star — 1 Windows Master PC (hub) + 11 Jetson Nano workers (leaves)
+# Network:  1 Gbps Ethernet switch
+
+cluster:
+  name: jetson-nano-cluster
+  topology: star
+  network_bandwidth_gbps: 1
+
+master:
+  # Windows Master PC — CPU-only coordinator
+  host: 192.168.1.1          # Static IP of the Master PC on the cluster VLAN
+  port: 7000                 # Coordinator registration port
+  api_port: 7001             # Optional REST API port
+
+nodes:
+  # 11 Jetson Nano worker nodes
+  - id: nano-01
+    host: 192.168.1.101
+    worker_port: 7010
+    rpc_port: 50052          # llama.cpp RPC server port
+    pycuda_port: 7020
+
+  - id: nano-02
+    host: 192.168.1.102
+    worker_port: 7010
+    rpc_port: 50052
+    pycuda_port: 7020
+
+  - id: nano-03
+    host: 192.168.1.103
+    worker_port: 7010
+    rpc_port: 50052
+    pycuda_port: 7020
+
+  - id: nano-04
+    host: 192.168.1.104
+    worker_port: 7010
+    rpc_port: 50052
+    pycuda_port: 7020
+
+  - id: nano-05
+    host: 192.168.1.105
+    worker_port: 7010
+    rpc_port: 50052
+    pycuda_port: 7020
+
+  - id: nano-06
+    host: 192.168.1.106
+    worker_port: 7010
+    rpc_port: 50052
+    pycuda_port: 7020
+
+  - id: nano-07
+    host: 192.168.1.107
+    worker_port: 7010
+    rpc_port: 50052
+    pycuda_port: 7020
+
+  - id: nano-08
+    host: 192.168.1.108
+    worker_port: 7010
+    rpc_port: 50052
+    pycuda_port: 7020
+
+  - id: nano-09
+    host: 192.168.1.109
+    worker_port: 7010
+    rpc_port: 50052
+    pycuda_port: 7020
+
+  - id: nano-10
+    host: 192.168.1.110
+    worker_port: 7010
+    rpc_port: 50052
+    pycuda_port: 7020
+
+  - id: nano-11
+    host: 192.168.1.111
+    worker_port: 7010
+    rpc_port: 50052
+    pycuda_port: 7020
+
+llm:
+  # Default llama.cpp inference settings
+  default_model: models/llama-3.1-8B-Q4_K_M.gguf
+  context_size: 4096
+  max_tokens: 512
+  temperature: 0.8
+  # Layers to offload to GPU via RPC (99 = all layers)
+  n_gpu_layers: 99
+
+pycuda:
+  # Default CUDA launch configuration
+  default_block_size: 256
