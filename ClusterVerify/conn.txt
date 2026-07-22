@@ -1,4 +1,0 @@
-RPC_150: True
-SSH_150: True
-RPC_151: True
-PC_IP: 192.168.50.127
