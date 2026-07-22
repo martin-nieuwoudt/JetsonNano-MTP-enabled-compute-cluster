@@ -1,5 +1,13 @@
 # Jetson Nano 11-Node Cluster — Work Plan
 
+Jetson worker MTP enabled image: https://drive.google.com/drive/folders/1qQJW5rnqS6peB5gDY1WJl_bqNa16NE7U?usp=sharing
+
+This is an Ubuntu 20.04 image that has RPC and is MTP enabled, i.e. it wil run modern inference. However, the cluster is intended for batch processes. Don't try to run it like a chat bot, you will be disappointed. 
+
+The rest of this file is about how I created the cluster. The above image should run 'out of the box', in a star topology. 
+
+** I conducted various computational experiements to see how well the cluster worked. Some of the script files may have remained in the repo. They are harmless, but I have left them there because they may be helpful to someone. Enjoy!
+
 ## Software Dependencies
 
 | Software Component | Architecture | URL |
