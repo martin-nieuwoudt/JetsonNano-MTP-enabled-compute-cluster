@@ -383,7 +383,7 @@ def main():
 
     sp = sub.add_parser("start", help="load model once, keep shards resident")
     sp.add_argument("--model", required=True, help="GGUF model path")
-    sp.add_argument("--ctx-size", type=int, default=4096, help="context size (-c)")
+    sp.add_argument("--ctx-size", type=int, default=16384, help="context size (-c)")
     sp.add_argument("--tensor-split", default=TENSOR_SPLIT_DEFAULT,
                     help="per-node layer share (11 values, node0 first)")
     sp.set_defaults(func=cmd_start)

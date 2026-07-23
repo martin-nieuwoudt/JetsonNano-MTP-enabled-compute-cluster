@@ -421,7 +421,7 @@ def main():
     ap.add_argument("--nodes", default=DEFAULT_NODE,
                     help="single IP, comma list, or 'all' for the 11-node fleet")
     ap.add_argument("--tokens", type=int, default=128, help="tokens to predict (-n)")
-    ap.add_argument("--ctx-size", type=int, default=4096, help="context size (-c)")
+    ap.add_argument("--ctx-size", type=int, default=16384, help="context size (-c)")
     ap.add_argument("--temp", type=float, default=0.8, help="temperature")
     ap.add_argument("--repeat-penalty", type=float, default=1.0, help="repeat penalty")
     ap.add_argument("--flash-attn", action="store_true", help="enable Flash Attention")
