@@ -69,6 +69,7 @@ try:
         MTP_CLI as RESIDENT_CLI,   # MTP llama-cli == node ggml-rpc-server build
         SAMPLING_TEMP, SAMPLING_MIN_P, SAMPLING_TOP_P, SAMPLING_REPEAT_PENALTY,
         CTX_SIZE_DEFAULT, MAX_TOKENS_DEFAULT, REQUEST_TIMEOUT,
+        reload_settings,
     )
 except Exception as _cfg_err:  # pragma: no cover
     print(f"[TELEMETRY] cluster_config unavailable ({_cfg_err}); using built-ins",
@@ -105,6 +106,9 @@ except Exception as _cfg_err:  # pragma: no cover
     CTX_SIZE_DEFAULT = 4096
     MAX_TOKENS_DEFAULT = 4096
     REQUEST_TIMEOUT = None
+    def reload_settings():
+        """Fallback no-op when cluster_config is unavailable."""
+        pass
     # Fallback definitions for cluster mode constants
     CLUSTER_MODE_MAINTENANCE = "maintenance"
     CLUSTER_MODE_NORMAL = "normal"
@@ -451,17 +455,36 @@ def _kill_port_owner(port):
 def _server_status():
     """Report resident-model state for the dashboard.
 
-    The dashboard is synchronised with the CLI backend: a model is "resident"
-    when it has been loaded via the MTP llama-cli + all-11-RPC-worker path (the
-    same path the proven CLI test uses). We report that real state, not a
-    separate HTTP server's /health, so the UI cannot be out of sync with the
-    working backend.
+    If the server host (ENS_HOST) is remote (e.g., the 3090 workstation), we
+    probe its /health endpoint to see if it's up. If it's local, we fall back
+    to the local _RESIDENT_MODEL state.
     """
+    import urllib.request as _ureq
     with _RESIDENT_LOCK:
         model = _RESIDENT_MODEL
         sampling = _RESIDENT_SAMPLING
+
+    # If pointing to a remote server (like the 3090), probe it directly
+    if ENS_HOST not in ("127.0.0.1", "localhost"):
+        try:
+            with _ureq.urlopen(f"http://{ENS_HOST}:{_RESIDENT_PORT}/health", timeout=2) as r:
+                remote_ok = (r.status == 200)
+            if remote_ok:
+                # Fetch remote model info if possible
+                try:
+                    with _ureq.urlopen(f"http://{ENS_HOST}:{_RESIDENT_PORT}/v1/models", timeout=2) as m:
+                        models_data = json.loads(m.read().decode("utf-8"))
+                        remote_model = (models_data.get("models") or [{}])[0].get("name", "remote-model")
+                except Exception:
+                    remote_model = "remote-model"
+                return {"running": True, "host": ENS_HOST, "port": _RESIDENT_PORT,
+                        "model": remote_model, "workers_up": 1, "workers_total": 1,
+                        "sampling": sampling}
+        except Exception:
+            pass
+
     running = bool(model)
-    return {"running": running, "host": "cluster", "port": PORT,
+    return {"running": running, "host": ENS_HOST, "port": _RESIDENT_PORT,
             "model": os.path.basename(model) if model else None,
             "workers_up": len(JETSON_IPS), "workers_total": len(JETSON_IPS),
             "sampling": sampling}
@@ -590,7 +613,7 @@ def _chat_completion(prompt, n_predict=None, system_prompt="", sampling=None):
         "stream": False,
     })
     req = _ureq.Request(
-        f"http://127.0.0.1:{_RESIDENT_PORT}/v1/chat/completions",
+        f"http://{ENS_HOST}:{_RESIDENT_PORT}/v1/chat/completions",
         data=payload.encode("utf-8"),
         headers={"Content-Type": "application/json"})
     try:
@@ -1409,10 +1432,9 @@ _RESIDENT_SAMPLING = {
 def _state_refresher(interval=2.0):
     """Continuously refresh _STATE_CACHE in a daemon thread.
 
-    Errors are logged to stderr (NOT silently swallowed) so a stuck SSH session
-    or any other failure surfaces in the launcher's console. The cache is also
-    timestamped so the UI can detect and warn about staleness when this thread
-    is hung.
+    Catches BaseException (not just Exception) so KeyboardInterrupt, SystemExit,
+    or generator throws cannot silently kill this thread. Errors are logged to
+    stderr. The cache is timestamped so the UI can detect staleness.
     """
     while True:
         try:
@@ -1420,10 +1442,13 @@ def _state_refresher(interval=2.0):
             with _STATE_LOCK:
                 _STATE_CACHE["state"] = snap
                 _STATE_CACHE["updated"] = time.time()
-        except Exception as e:
+        except BaseException as e:
             print(f"[TELEMETRY] refresher error: {type(e).__name__}: {e}",
                   file=sys.stderr)
-        time.sleep(interval)
+        try:
+            time.sleep(interval)
+        except BaseException:
+            pass  # don't let interrupted sleep kill the loop
 
 
 def _build_server_cmd(model, ctx, sampling, rpc_str, resident_cli, resident_port):
@@ -1468,7 +1493,13 @@ def _get_cached_state():
 
 class _Handler(BaseHTTPRequestHandler):
     def do_GET(self):
-        if self.path == "/api/state":
+        if self.path == "/health":
+            body = json.dumps({"status": "ok", "uptime_s": round(time.time() - _WEB_START_TIME, 1)}).encode("utf-8")
+            self.send_response(200)
+            self.send_header("Content-Type", JSON_CT)
+            self.end_headers()
+            self.wfile.write(body)
+        elif self.path == "/api/state":
             body = json.dumps(_get_cached_state() or {}).encode("utf-8")
             self.send_response(200)
             self.send_header("Content-Type", JSON_CT)
@@ -1505,6 +1536,7 @@ class _Handler(BaseHTTPRequestHandler):
             self.end_headers()
             self.wfile.write(body)
         elif self.path == "/api/sampling":
+            reload_settings()
             body = json.dumps({
                 "temp": SAMPLING_TEMP,
                 "min_p": SAMPLING_MIN_P,
@@ -1881,10 +1913,16 @@ class _Handler(BaseHTTPRequestHandler):
         pass
 
 
+# Track when the web server started (set by cmd_web, read by /health).
+_WEB_START_TIME = 0.0
+
+
 def cmd_web():
+    global _WEB_START_TIME
     # Local-only HTTP dashboard on a trusted LAN segment. No credentials or PII
     # are served; HTTPS is unnecessary for loopback/LAN telemetry viewing.
     import threading
+    _WEB_START_TIME = time.time()
     threading.Thread(target=_state_refresher, daemon=True).start()
     print(f"[WEB] Dashboard running at http://localhost:{WEB_PORT}  (Ctrl+C to stop)")
     srv = ThreadingHTTPServer((WEB_HOST, WEB_PORT), _Handler)
