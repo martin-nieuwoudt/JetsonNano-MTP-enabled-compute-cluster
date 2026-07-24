@@ -1692,8 +1692,12 @@ class _Handler(BaseHTTPRequestHandler):
         """
         length = int(self.headers.get("Content-Length", 0))
         payload = json.loads(self.rfile.read(length) or b"{}")
-        port = int(payload.get("port", 8080))
-        
+        try:
+            port = int(payload.get("port", 8080))
+        except (TypeError, ValueError):
+            return json.dumps({"ok": False, "msg": "invalid port"}).encode("utf-8")
+        if not (1 <= port <= 65535):
+            return json.dumps({"ok": False, "msg": "port out of range (1-65535)", "port": port}).encode("utf-8")
         # Kill any process on the port
         _kill_port_owner(port)
         
