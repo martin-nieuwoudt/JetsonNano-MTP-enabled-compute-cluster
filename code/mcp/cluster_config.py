@@ -99,6 +99,12 @@ METRICS_FILE = RPC_METRICS_FILE
 # MTP build matches the node ggml-rpc-server (commit 20a04b2) deployed fleet-wide.
 # RPC is lockstep: the llama-server client MUST be the same build as the node
 # daemon, or model load fails with "server did not come up" / "no model resident".
+SERVER_BIN = r"C:\Installers\System\llama-b10092-bin-win-cuda-12.4-x64\llama-server.exe"
+SERVER_HOST = "192.168.50.202"
+SERVER_PORT = 8080
+SERVER_PID_FILE = os.path.join(CODE_DIR, "cluster_server.pid")
+SERVER_LOG = os.path.join(CODE_DIR, "cluster_server.log")
+# daemon, or model load fails with "server did not come up" / "no model resident".
 SERVER_BIN = r"C:\llama.cpp-mtp\build\bin\llama-server.exe"
 SERVER_HOST = "127.0.0.1"
 SERVER_PORT = 8080
@@ -120,7 +126,7 @@ CHAT_UPLOAD_DIR = os.path.join(WORKSPACE, "chat_uploads")
 # Built-in fallback defaults (used only if cluster_settings.json is absent/bad).
 _SETTINGS_FALLBACK = {
     "sampling": {"temp": 0.1, "min_p": 0.05, "top_p": 0.9, "repeat_penalty": 1.1},
-    "context":  {"ctx_size": 4096},
+    "context":  {"ctx_size": 16384},
     "output":   {"max_tokens": 4096},
     # This is a BATCH cluster: jobs are queued and left to run as long as they
     # need. request_timeout is the per-HTTP-call ceiling for generation. null =
@@ -194,6 +200,25 @@ SAMPLING_REPEAT_PENALTY = SETTINGS["sampling"]["repeat_penalty"]
 CTX_SIZE_DEFAULT = SETTINGS["context"]["ctx_size"]
 MAX_TOKENS_DEFAULT = SETTINGS["output"]["max_tokens"]
 REQUEST_TIMEOUT = SETTINGS["runtime"]["request_timeout"]   # None = no limit
+
+def reload_settings():
+    """Re-read cluster_settings.json and update all global tunables.
+
+    Call this before returning settings from API endpoints so the
+    dashboard always sees the latest saved values, not stale cached ones.
+    """
+    global SETTINGS, SAMPLING_TEMP, SAMPLING_MIN_P, SAMPLING_TOP_P
+    global SAMPLING_REPEAT_PENALTY, CTX_SIZE_DEFAULT, MAX_TOKENS_DEFAULT
+    global REQUEST_TIMEOUT
+
+    SETTINGS = _load_settings()
+    SAMPLING_TEMP = SETTINGS["sampling"]["temp"]
+    SAMPLING_MIN_P = SETTINGS["sampling"]["min_p"]
+    SAMPLING_TOP_P = SETTINGS["sampling"]["top_p"]
+    SAMPLING_REPEAT_PENALTY = SETTINGS["sampling"]["repeat_penalty"]
+    CTX_SIZE_DEFAULT = SETTINGS["context"]["ctx_size"]
+    MAX_TOKENS_DEFAULT = SETTINGS["output"]["max_tokens"]
+    REQUEST_TIMEOUT = SETTINGS["runtime"]["request_timeout"]
 
 # ---------------------------------------------------------------------------
 # MODEL STORAGE ARCHITECTURE  (RETIRED 2026-07-15 — single source of truth)

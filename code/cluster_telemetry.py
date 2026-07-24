@@ -69,11 +69,13 @@ try:
         MTP_CLI as RESIDENT_CLI,   # MTP llama-cli == node ggml-rpc-server build
         SAMPLING_TEMP, SAMPLING_MIN_P, SAMPLING_TOP_P, SAMPLING_REPEAT_PENALTY,
         CTX_SIZE_DEFAULT, MAX_TOKENS_DEFAULT, REQUEST_TIMEOUT,
+        reload_settings,
     )
 except Exception as _cfg_err:  # pragma: no cover
     print(f"[TELEMETRY] cluster_config unavailable ({_cfg_err}); using built-ins",
           file=sys.stderr)
     PORT = 50052
+    RPC_PORT = 50052  # Alias for compatibility with rpc_list()
     JETSON_IPS = [f"192.168.50.{i}" for i in range(150, 161)]
     NODE0_IP = "192.168.50.150"  # NOSONAR
     SSH_USER = "jetson"
@@ -104,6 +106,15 @@ except Exception as _cfg_err:  # pragma: no cover
     CTX_SIZE_DEFAULT = 4096
     MAX_TOKENS_DEFAULT = 4096
     REQUEST_TIMEOUT = None
+    def reload_settings():
+        """Fallback no-op when cluster_config is unavailable."""
+        pass
+    # Fallback definitions for cluster mode constants
+    CLUSTER_MODE_MAINTENANCE = "maintenance"
+    CLUSTER_MODE_NORMAL = "normal"
+    def set_cluster_mode(mode):
+        """Fallback no-op when cluster_config is unavailable."""
+        pass
 
 # ===========================================================================
 # COLLECTORS
@@ -125,15 +136,16 @@ def get_node_ssh(ip):
     /proc/meminfo (MemAvailable) as the unified RAM free, check for a display server,
     and parse tegrastats for the hottest zone. Returns (ram_gb, ui_active, temp_c).
     """
-    ssh = paramiko.SSHClient()
-    ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+    ssh = None
     try:
+        ssh = paramiko.SSHClient()
+        ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+        ssh.connect(ip, username=SSH_USER, key_filename=SSH_KEY_PATH, timeout=3.0)
         # Connect timeout guards the TCP/SSH handshake. The channel read timeout
         # (set below) is the critical guard: without it, a node that accepts the
         # connection but then stalls (e.g. a board dropping off the network mid-
         # session) would block .read() FOREVER, freezing the background refresher
         # thread and leaving the dashboard stuck on a stale all-down snapshot.
-        ssh.connect(ip, username=SSH_USER, key_filename=SSH_KEY_PATH, timeout=3.0)
         # 5s ceiling on each command's output read -- a node that cannot answer
         # within this is effectively down and must not hang the whole view.
         CH_TIMEOUT = 5.0
@@ -151,7 +163,6 @@ def get_node_ssh(ip):
         _, o3, _ = ssh.exec_command("tegrastats --interval 1000 2>/dev/null | head -1")
         o3.channel.settimeout(CH_TIMEOUT)
         line = o3.read().decode().strip()
-        ssh.close()
         # tegrastats emits one `Zone@NNC` token per thermal sensor. We must NOT
         # take a blind max() over all of them: the PMIC zone (power-management IC)
         # sits at a constant ~50C on every Nano regardless of load, which would
@@ -168,6 +179,9 @@ def get_node_ssh(ip):
         return ram_gb, ui_active, temp_c
     except Exception:
         return 0.0, False, None
+    finally:
+        if ssh is not None:
+            ssh.close()
 
 
 def get_node_snapshot(ip):
@@ -386,39 +400,91 @@ def _coerce_sampling(raw):
 
 
 def _kill_port_owner(port):
-    """Kill any process listening on (127.0.0.1, port). Idempotent."""
+    """Kill any process listening on (127.0.0.1, port). Idempotent.
+    
+    Cross-platform: uses netstat on Windows, lsof/ss on Linux/macOS.
+    On Windows, also tries PowerShell Get-NetTCPConnection for better coverage.
+    """
     import subprocess as _sp
-    if sys.platform != "win32":
-        return
-    try:
-        out = _sp.check_output(
-            ["netstat", "-ano"], text=True, timeout=5,
-            stderr=_sp.DEVNULL,
-        )
-        for line in out.splitlines():
-            if f"127.0.0.1:{port}" in line and "LISTENING" in line:
-                pid = line.strip().split()[-1]
-                if pid.isdigit():
-                    _sp.run(["taskkill", "/F", "/PID", pid],
-                            stdout=_sp.DEVNULL, stderr=_sp.DEVNULL, timeout=5)
-    except Exception:
-        pass
+    import shutil
+    
+    if sys.platform == "win32":
+        # Windows: try netstat first
+        try:
+            out = _sp.check_output(
+                ["netstat", "-ano"], text=True, timeout=5,
+                stderr=_sp.DEVNULL,
+            )
+            for line in out.splitlines():
+                if f"127.0.0.1:{port}" in line and "LISTENING" in line:
+                    pid = line.strip().split()[-1]
+                    if pid.isdigit():
+                        _sp.run(["taskkill", "/F", "/PID", pid],
+                                stdout=_sp.DEVNULL, stderr=_sp.DEVNULL, timeout=5)
+        except Exception:
+            pass
+        
+        # Also try PowerShell Get-NetTCPConnection (more reliable on newer Windows)
+        try:
+            ps_cmd = (
+                f"Get-NetTCPConnection -LocalAddress 127.0.0.1 -LocalPort {port} "
+                f"-State Listen -ErrorAction SilentlyContinue | "
+                f"Select-Object -ExpandProperty OwningProcess | "
+                f"ForEach-Object {{ Stop-Process -Id $_ -Force -ErrorAction SilentlyContinue }}"
+            )
+            _sp.run(["powershell", "-NoProfile", "-Command", ps_cmd],
+                    stdout=_sp.DEVNULL, stderr=_sp.DEVNULL, timeout=10)
+        except Exception:
+            pass
+    else:
+        # Linux/macOS: use lsof or ss
+        for cmd in (["lsof", "-ti", f"tcp:127.0.0.1:{port}"], 
+                    ["ss", "-ltnp", f"sport = :{port}"]):
+            try:
+                if shutil.which(cmd[0]):
+                    out = _sp.check_output(cmd, text=True, timeout=5, stderr=_sp.DEVNULL)
+                    for pid in out.strip().split():
+                        if pid.isdigit():
+                            _sp.run(["kill", "-9", pid], 
+                                    stdout=_sp.DEVNULL, stderr=_sp.DEVNULL, timeout=5)
+                    break
+            except Exception:
+                continue
 
 
 def _server_status():
     """Report resident-model state for the dashboard.
 
-    The dashboard is synchronised with the CLI backend: a model is "resident"
-    when it has been loaded via the MTP llama-cli + all-11-RPC-worker path (the
-    same path the proven CLI test uses). We report that real state, not a
-    separate HTTP server's /health, so the UI cannot be out of sync with the
-    working backend.
+    If the server host (ENS_HOST) is remote (e.g., the 3090 workstation), we
+    probe its /health endpoint to see if it's up. If it's local, we fall back
+    to the local _RESIDENT_MODEL state.
     """
+    import urllib.request as _ureq
     with _RESIDENT_LOCK:
         model = _RESIDENT_MODEL
         sampling = _RESIDENT_SAMPLING
+
+    # If pointing to a remote server (like the 3090), probe it directly
+    if ENS_HOST not in ("127.0.0.1", "localhost"):
+        try:
+            with _ureq.urlopen(f"http://{ENS_HOST}:{_RESIDENT_PORT}/health", timeout=2) as r:
+                remote_ok = (r.status == 200)
+            if remote_ok:
+                # Fetch remote model info if possible
+                try:
+                    with _ureq.urlopen(f"http://{ENS_HOST}:{_RESIDENT_PORT}/v1/models", timeout=2) as m:
+                        models_data = json.loads(m.read().decode("utf-8"))
+                        remote_model = (models_data.get("models") or [{}])[0].get("name", "remote-model")
+                except Exception:
+                    remote_model = "remote-model"
+                return {"running": True, "host": ENS_HOST, "port": _RESIDENT_PORT,
+                        "model": remote_model, "workers_up": 1, "workers_total": 1,
+                        "sampling": sampling}
+        except Exception:
+            pass
+
     running = bool(model)
-    return {"running": running, "host": "cluster", "port": PORT,
+    return {"running": running, "host": ENS_HOST, "port": _RESIDENT_PORT,
             "model": os.path.basename(model) if model else None,
             "workers_up": len(JETSON_IPS), "workers_total": len(JETSON_IPS),
             "sampling": sampling}
@@ -513,10 +579,10 @@ def _save_upload(filename, b64data):
 
 
 def _strip_think(text):
-    """Remove <think>...</think> reasoning blocks from model output so the
+    """Remove 认...ground reasoning blocks from model output so the
     dashboard shows only the final answer (raw think tags are not useful in chat)."""
     import re as _re
-    return _re.sub(r"<think>.*?</think>", "", text, flags=_re.DOTALL).strip()
+    return _re.sub(r"认.*?地", "", text, flags=_re.DOTALL).strip()
 
 
 def _chat_completion(prompt, n_predict=None, system_prompt="", sampling=None):
@@ -547,7 +613,7 @@ def _chat_completion(prompt, n_predict=None, system_prompt="", sampling=None):
         "stream": False,
     })
     req = _ureq.Request(
-        f"http://127.0.0.1:{_RESIDENT_PORT}/v1/chat/completions",
+        f"http://{ENS_HOST}:{_RESIDENT_PORT}/v1/chat/completions",
         data=payload.encode("utf-8"),
         headers={"Content-Type": "application/json"})
     try:
@@ -872,6 +938,7 @@ DASHBOARD_HTML = """<!doctype html>
       <div class="model-actions-row">
         <button id="btnLoad" class="btn load">&#8635; Load</button>
         <button id="btnEject" class="btn eject">&#9211; Eject</button>
+        <button id="btnForceClear" class="btn reset" title="Force clear stuck port 8080">&#8883; Force Clear</button>
         <button id="btnSampReset" class="btn reset" title="Reset sampling to config defaults">&#8634; Reset</button>
       </div>
       <span id="modelStatus" class="status dead">no model resident</span>
@@ -1175,6 +1242,19 @@ document.getElementById('btnEject').addEventListener('click', async function(){
   } catch(e){ modelStatus.textContent = 'eject error: ' + e; }
   this.disabled = false;
 });
+document.getElementById('btnForceClear').addEventListener('click', async function(){
+  this.disabled = true;
+  modelStatus.className = 'status dead'; modelStatus.textContent = 'force clearing port 8080...';
+  try {
+    const r = await fetch('/api/server/force-clear-port', {method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({port: 8080})});
+    const d = await r.json();
+    modelStatus.textContent = d.ok ? 'port cleared, ready to load' : ('clear failed: ' + d.msg);
+    modelStatus.className = d.ok ? 'status live' : 'status dead';
+  } catch(e){ modelStatus.textContent = 'clear error: ' + e; modelStatus.className = 'status dead'; }
+  this.disabled = false;
+});
 
 // ---- Unified chat (single + ensemble) ----
 let attachedFile = null;
@@ -1352,10 +1432,9 @@ _RESIDENT_SAMPLING = {
 def _state_refresher(interval=2.0):
     """Continuously refresh _STATE_CACHE in a daemon thread.
 
-    Errors are logged to stderr (NOT silently swallowed) so a stuck SSH session
-    or any other failure surfaces in the launcher's console. The cache is also
-    timestamped so the UI can detect and warn about staleness when this thread
-    is hung.
+    Catches BaseException (not just Exception) so KeyboardInterrupt, SystemExit,
+    or generator throws cannot silently kill this thread. Errors are logged to
+    stderr. The cache is timestamped so the UI can detect staleness.
     """
     while True:
         try:
@@ -1363,10 +1442,13 @@ def _state_refresher(interval=2.0):
             with _STATE_LOCK:
                 _STATE_CACHE["state"] = snap
                 _STATE_CACHE["updated"] = time.time()
-        except Exception as e:
+        except BaseException as e:
             print(f"[TELEMETRY] refresher error: {type(e).__name__}: {e}",
                   file=sys.stderr)
-        time.sleep(interval)
+        try:
+            time.sleep(interval)
+        except BaseException:
+            pass  # don't let interrupted sleep kill the loop
 
 
 def _build_server_cmd(model, ctx, sampling, rpc_str, resident_cli, resident_port):
@@ -1411,7 +1493,13 @@ def _get_cached_state():
 
 class _Handler(BaseHTTPRequestHandler):
     def do_GET(self):
-        if self.path == "/api/state":
+        if self.path == "/health":
+            body = json.dumps({"status": "ok", "uptime_s": round(time.time() - _WEB_START_TIME, 1)}).encode("utf-8")
+            self.send_response(200)
+            self.send_header("Content-Type", JSON_CT)
+            self.end_headers()
+            self.wfile.write(body)
+        elif self.path == "/api/state":
             body = json.dumps(_get_cached_state() or {}).encode("utf-8")
             self.send_response(200)
             self.send_header("Content-Type", JSON_CT)
@@ -1448,6 +1536,7 @@ class _Handler(BaseHTTPRequestHandler):
             self.end_headers()
             self.wfile.write(body)
         elif self.path == "/api/sampling":
+            reload_settings()
             body = json.dumps({
                 "temp": SAMPLING_TEMP,
                 "min_p": SAMPLING_MIN_P,
@@ -1482,6 +1571,7 @@ class _Handler(BaseHTTPRequestHandler):
             "/api/start": self._post_start,
             "/api/server/load": self._post_server_load,
             "/api/server/eject": self._post_server_eject,
+            "/api/server/force-clear-port": self._post_force_clear_port,
             "/api/chat/upload": self._post_chat_upload,
             "/api/chat": self._post_chat,
             "/api/ensemble": self._post_ensemble,
@@ -1541,12 +1631,20 @@ class _Handler(BaseHTTPRequestHandler):
                     pass
                 _RESIDENT_PROC = None
             _RESIDENT_PORT = 8080
-            _kill_port_owner(_RESIDENT_PORT)
-            time.sleep(0.5)  # let the OS release the port
-            if _probe_port(_RESIDENT_PORT, host="127.0.0.1"):
-                return json.dumps({"ok": False,
-                    "msg": "Port 8080 still in use by a stale process. "
-                           "Eject and try Load again."}).encode("utf-8")
+            
+            # Aggressive port cleanup: try multiple times with increasing delays
+            for attempt in range(3):
+                _kill_port_owner(_RESIDENT_PORT)
+                time.sleep(0.5 * (attempt + 1))  # 0.5s, 1s, 1.5s
+                if not _probe_port(_RESIDENT_PORT, host="127.0.0.1"):
+                    break
+            else:
+                # Final check after all attempts
+                if _probe_port(_RESIDENT_PORT, host="127.0.0.1"):
+                    return json.dumps({"ok": False,
+                        "msg": f"Port {_RESIDENT_PORT} still in use after cleanup attempts. "
+                               "Try Eject first, then Load again."}).encode("utf-8")
+            
             cmd = _build_server_cmd(model, ctx, sampling, rpc_list(),
                                     RESIDENT_CLI, _RESIDENT_PORT)
             env = os.environ.copy()
@@ -1563,6 +1661,13 @@ class _Handler(BaseHTTPRequestHandler):
                 _RESIDENT_CTX = ctx
                 _RESIDENT_SAMPLING = sampling
                 return json.dumps({"ok": True, "msg": "resident"}).encode("utf-8")
+            # If server failed to start, clean up the process
+            try:
+                _RESIDENT_PROC.kill()
+                _RESIDENT_PROC.wait(timeout=5)
+            except Exception:
+                pass
+            _RESIDENT_PROC = None
             return json.dumps({"ok": False, "msg": msg}).encode("utf-8")
 
     def _post_server_eject(self):
@@ -1577,6 +1682,47 @@ class _Handler(BaseHTTPRequestHandler):
                     pass
                 _RESIDENT_PROC = None
         return json.dumps({"ok": True, "msg": "no model resident"}).encode("utf-8")
+
+    def _post_force_clear_port(self):
+        """Force-clear port 8080 (or specified port) for stuck model cleanup.
+        
+        This is a recovery endpoint for when the normal eject fails or when
+        a stale process is blocking the port. It kills any process on the port
+        and clears the resident state.
+        """
+        length = int(self.headers.get("Content-Length", 0))
+        payload = json.loads(self.rfile.read(length) or b"{}")
+        try:
+            port = int(payload.get("port", 8080))
+        except (TypeError, ValueError):
+            return json.dumps({"ok": False, "msg": "invalid port"}).encode("utf-8")
+        if not (1 <= port <= 65535):
+            return json.dumps({"ok": False, "msg": "port out of range (1-65535)", "port": port}).encode("utf-8")
+        # Kill any process on the port
+        _kill_port_owner(port)
+        
+        # Also clear resident state if this is the main port
+        if port == 8080:
+            with _RESIDENT_LOCK:
+                global _RESIDENT_MODEL, _RESIDENT_PROC
+                _RESIDENT_MODEL = None
+                if _RESIDENT_PROC is not None:
+                    try:
+                        _RESIDENT_PROC.kill()
+                        _RESIDENT_PROC.wait(timeout=5)
+                    except Exception:
+                        pass
+                    _RESIDENT_PROC = None
+        
+        # Verify port is clear
+        time.sleep(0.5)
+        port_clear = not _probe_port(port, host="127.0.0.1")
+        
+        return json.dumps({
+            "ok": port_clear,
+            "msg": "port cleared" if port_clear else f"port {port} still in use after kill attempt",
+            "port": port,
+        }).encode("utf-8")
 
     def _post_chat_upload(self):
         # Save an uploaded file (base64 JSON) to CHAT_UPLOAD_DIR for use as
@@ -1764,17 +1910,23 @@ class _Handler(BaseHTTPRequestHandler):
         except Exception as e:
             return json.dumps({"ok": False, "msg": str(e)}).encode("utf-8")
 
-    def log_message(self, *args):
+    def log_message(self, format, *args):
         # Intentionally silent: this is a local-only telemetry dashboard bound to
         # 127.0.0.1/0.0.0.0 on a trusted LAN; request logging adds noise with no
         # security value here.
         pass
 
 
+# Track when the web server started (set by cmd_web, read by /health).
+_WEB_START_TIME = 0.0
+
+
 def cmd_web():
+    global _WEB_START_TIME
     # Local-only HTTP dashboard on a trusted LAN segment. No credentials or PII
     # are served; HTTPS is unnecessary for loopback/LAN telemetry viewing.
     import threading
+    _WEB_START_TIME = time.time()
     threading.Thread(target=_state_refresher, daemon=True).start()
     print(f"[WEB] Dashboard running at http://localhost:{WEB_PORT}  (Ctrl+C to stop)")
     srv = ThreadingHTTPServer((WEB_HOST, WEB_PORT), _Handler)
