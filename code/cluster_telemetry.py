@@ -438,16 +438,24 @@ def _kill_port_owner(port):
             pass
     else:
         # Linux/macOS: use lsof or ss
+        import re
         for cmd in (["lsof", "-ti", f"tcp:127.0.0.1:{port}"], 
                     ["ss", "-ltnp", f"sport = :{port}"]):
             try:
                 if shutil.which(cmd[0]):
                     out = _sp.check_output(cmd, text=True, timeout=5, stderr=_sp.DEVNULL)
-                    for pid in out.strip().split():
-                        if pid.isdigit():
-                            _sp.run(["kill", "-9", pid], 
-                                    stdout=_sp.DEVNULL, stderr=_sp.DEVNULL, timeout=5)
-                    break
+                    if cmd[0] == "ss":
+                        # Extract PIDs from ss output: look for pid= followed by digits
+                        pids = re.findall(r'pid=(\d+)', out)
+                        for pid in pids:
+                            if pid.isdigit():
+                                _sp.run(["kill", "-9", pid], 
+                                        stdout=_sp.DEVNULL, stderr=_sp.DEVNULL, timeout=5)
+                    else:  # lsof
+                        for pid in out.strip().split():
+                            if pid.isdigit():
+                                _sp.run(["kill", "-9", pid], 
+                                        stdout=_sp.DEVNULL, stderr=_sp.DEVNULL, timeout=5)
             except Exception:
                 continue
 
@@ -579,10 +587,10 @@ def _save_upload(filename, b64data):
 
 
 def _strip_think(text):
-    """Remove 认...ground reasoning blocks from model output so the
+    """Remove <think>...</think> blocks from model output so the
     dashboard shows only the final answer (raw think tags are not useful in chat)."""
     import re as _re
-    return _re.sub(r"认.*?地", "", text, flags=_re.DOTALL).strip()
+    return _re.sub(r"", "", text, flags=_re.DOTALL).strip()
 
 
 def _chat_completion(prompt, n_predict=None, system_prompt="", sampling=None):
@@ -1537,13 +1545,14 @@ class _Handler(BaseHTTPRequestHandler):
             self.wfile.write(body)
         elif self.path == "/api/sampling":
             reload_settings()
+            import mcp.cluster_config as config
             body = json.dumps({
-                "temp": SAMPLING_TEMP,
-                "min_p": SAMPLING_MIN_P,
-                "top_p": SAMPLING_TOP_P,
-                "repeat_penalty": SAMPLING_REPEAT_PENALTY,
-                "ctx_size": CTX_SIZE_DEFAULT,
-                "max_tokens": MAX_TOKENS_DEFAULT,
+                "temp": config.SAMPLING_TEMP,
+                "min_p": config.SAMPLING_MIN_P,
+                "top_p": config.SAMPLING_TOP_P,
+                "repeat_penalty": config.SAMPLING_REPEAT_PENALTY,
+                "ctx_size": config.CTX_SIZE_DEFAULT,
+                "max_tokens": config.MAX_TOKENS_DEFAULT,
             }).encode("utf-8")
             self.send_response(200)
             self.send_header("Content-Type", JSON_CT)

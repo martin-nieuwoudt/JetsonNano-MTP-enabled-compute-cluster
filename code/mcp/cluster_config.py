@@ -99,12 +99,6 @@ METRICS_FILE = RPC_METRICS_FILE
 # MTP build matches the node ggml-rpc-server (commit 20a04b2) deployed fleet-wide.
 # RPC is lockstep: the llama-server client MUST be the same build as the node
 # daemon, or model load fails with "server did not come up" / "no model resident".
-SERVER_BIN = r"C:\Installers\System\llama-b10092-bin-win-cuda-12.4-x64\llama-server.exe"
-SERVER_HOST = "192.168.50.202"
-SERVER_PORT = 8080
-SERVER_PID_FILE = os.path.join(CODE_DIR, "cluster_server.pid")
-SERVER_LOG = os.path.join(CODE_DIR, "cluster_server.log")
-# daemon, or model load fails with "server did not come up" / "no model resident".
 SERVER_BIN = r"C:\llama.cpp-mtp\build\bin\llama-server.exe"
 SERVER_HOST = "127.0.0.1"
 SERVER_PORT = 8080
